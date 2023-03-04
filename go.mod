@@ -1,4 +1,4 @@
-module github.com/nanointeractive/MemoryToTimeScaleDb
+module github.com/nano-interactive/MemoryToTimeScaleDb
 
 go 1.19
 
