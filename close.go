@@ -1,6 +1,6 @@
 package mtsdb
 
-func Close() {
-	bulkInsert()
-	close(chnErr)
+func (m *Mtsdb) Close() {
+	m.bulkInsert()
+	close(m.ChnErr)
 }

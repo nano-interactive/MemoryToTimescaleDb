@@ -2,8 +2,8 @@ package mtsdb
 
 import "sync/atomic"
 
-func Reset() {
-	mu.Lock()
-	container = make(map[string]*atomic.Uint64, containerSize)
-	mu.Unlock()
+func (m *Mtsdb) Reset() {
+	m.mu.Lock()
+	m.container = make(map[string]*atomic.Uint64, m.config.Size)
+	m.mu.Unlock()
 }

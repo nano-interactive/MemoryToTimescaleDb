@@ -1,43 +1,35 @@
 package mtsdb
 
 import (
-	"fmt"
+	"context"
+	"github.com/jackc/pgx/v5"
+	"github.com/stretchr/testify/require"
 	"sync/atomic"
 	"testing"
 )
 
-func TestBulkInsert(t *testing.T) {
+var testCntBulkLen int
 
-	ts := make(map[string]*uint64, 2)
-	var a uint64 = 0
-	ts["two"] = &a
-	atomic.AddUint64(ts["two"], 1)
+func TestInsert(t *testing.T) {
+	assert := require.New(t)
 
-	fmt.Println(ts["two"])
+	tstConfig := Config{
+		Size:      3,
+		InsertSQL: "",
+	}
+	m := New(context.Background(), nil, tstConfig)
+	m.bulkFunc = func(batch *pgx.Batch) {
+		testCntBulkLen += batch.Len()
+	}
 
-	ts2 := ts
+	param := map[string]*atomic.Uint64{
+		"one":   {},
+		"two":   {},
+		"three": {},
+		"four":  {},
+	}
+	m.insert(param)
 
-	ts = make(map[string]*uint64, 2)
-	var b uint64 = 23
-	ts["two"] = &b
+	assert.Equal(4, testCntBulkLen)
 
-	fmt.Println("ts", *ts["two"])
-	fmt.Println("ts2", *ts2["two"])
-}
-func TestBulkInsert2(t *testing.T) {
-
-	ts := make(map[string]*atomic.Uint64, 2)
-	ts["two"] = &atomic.Uint64{}
-	ts["two"].Add(1)
-
-	fmt.Println(ts["two"].Load())
-
-	ts2 := ts
-
-	ts = make(map[string]*atomic.Uint64, 2)
-	ts["two"] = &atomic.Uint64{}
-	ts["two"].Add(23)
-
-	fmt.Println("ts", ts["two"].Load())
-	fmt.Println("ts2", ts2["two"].Load())
 }
