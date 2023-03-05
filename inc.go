@@ -10,8 +10,8 @@ func (m *Mtsdb) Inc(url string) {
 		m.container[url] = &atomic.Uint64{}
 	}
 	isBulkInsert := len(m.container) >= m.config.Size
-	m.mu.Unlock()
 	m.container[url].Add(1)
+	m.mu.Unlock()
 	if isBulkInsert {
 		m.bulkInsert(true)
 	}
