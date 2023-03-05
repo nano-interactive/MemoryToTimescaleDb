@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-func TestClose(t *testing.T) {
+func TestFlush(t *testing.T) {
 	var mu = sync.Mutex{}
 	assert := require.New(t)
 
@@ -37,7 +37,7 @@ func TestClose(t *testing.T) {
 	assert.Equal(uint64(1), m.container["one"].Load())
 	assert.Equal(uint64(2), m.container["four"].Load())
 
-	m.Close()
+	m.Flush()
 	time.Sleep(2 * time.Millisecond)
 	mu.Lock()
 	assert.Equal(4, insertInc, "bulk insert should be called once")

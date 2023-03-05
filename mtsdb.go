@@ -19,6 +19,7 @@ type Mtsdb struct {
 	config    Config
 	container map[string]*atomic.Uint64
 	mu        sync.Mutex
+	wg        sync.WaitGroup
 	bulkFunc  func(*pgx.Batch)
 	pool      *pgxpool.Pool
 	ctx       context.Context
@@ -31,12 +32,15 @@ func New(ctx context.Context, pool *pgxpool.Pool, configMtsdb ...Config) *Mtsdb 
 		config = configMtsdb[0]
 	} else {
 		config = Config{
-			Size:      100_000,
-			InsertSQL: "INSERT INTO urls (url,cnt) VALUES ($1,$2)",
+			Size: 100_000,
 		}
 	}
 	if config.Size <= 0 {
 		panic("mtsdb size has to be > 0")
+	}
+
+	if config.InsertSQL == "" {
+		config.InsertSQL = "INSERT INTO url_list (time,url,cnt) VALUES (NOW(),$1,$2)"
 	}
 
 	m := &Mtsdb{
