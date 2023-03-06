@@ -3,27 +3,21 @@ package mtsdb
 import (
 	"fmt"
 	"github.com/jackc/pgx/v5"
-	"sync/atomic"
 	"time"
 )
 
-func (m *Mtsdb) bulkInsert(async bool) {
+func (m *Mtsdb) bulkInsert() {
 	m.mu.Lock()
 	insertContainer := m.container
-	m.container = make(map[string]*atomic.Uint64)
+	m.container = make(map[string]int)
 	m.mu.Unlock()
-	if async {
-		go m.insert(insertContainer)
-	} else {
-		m.insert(insertContainer)
-	}
-
+	m.insert(insertContainer)
 }
 
-func (m *Mtsdb) insert(container map[string]*atomic.Uint64) {
+func (m *Mtsdb) insert(container map[string]int) {
 	batch := &pgx.Batch{}
 	for key, item := range container {
-		batch.Queue(m.config.InsertSQL, key, item.Load())
+		batch.Queue(m.config.InsertSQL, key, item)
 		if batch.Len() >= m.config.Size {
 			m.bulkFunc(batch)
 			batch = &pgx.Batch{}

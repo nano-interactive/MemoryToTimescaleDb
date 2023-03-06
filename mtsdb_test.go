@@ -36,8 +36,8 @@ func TestNew(t *testing.T) {
 	m.Inc("three")
 	m.Inc("four")
 	assert.Equal(0, insertInc, "bulk insert should not be called")
-	assert.Equal(uint64(1), m.container["one"].Load())
-	assert.Equal(uint64(2), m.container["four"].Load())
+	assert.Equal(1, m.container["one"])
+	assert.Equal(2, m.container["four"])
 
 	m.Inc("five")
 	time.Sleep(2 * time.Millisecond)
@@ -51,7 +51,52 @@ func TestNew(t *testing.T) {
 
 	m.Inc("six")
 	m.Inc("six")
-	assert.Equal(uint64(2), m.container["six"].Load())
+	assert.Equal(2, m.container["six"])
+
+	m.Close()
+}
+
+func TestTick(t *testing.T) {
+	assert := require.New(t)
+
+	var mu sync.Mutex
+
+	insertInc := 0
+
+	tstConfig := Config{
+		Size:           1,
+		InsertSQL:      "",
+		InsertDuration: 100 * time.Millisecond,
+	}
+	m := New(context.Background(), nil, tstConfig)
+	m.bulkFunc = func(batch *pgx.Batch) {
+		mu.Lock()
+		defer mu.Unlock()
+		insertInc += batch.Len()
+	}
+
+	m.Inc("one")
+	m.Inc("two")
+	m.Inc("three")
+	m.Inc("four")
+	m.Inc("five")
+	m.Inc("three")
+	m.Inc("four")
+	assert.Equal(0, insertInc, "bulk insert should not be called")
+	assert.Equal(1, m.container["one"])
+	assert.Equal(2, m.container["four"])
+
+	time.Sleep(110 * time.Millisecond)
+	mu.Lock()
+	assert.Equal(5, insertInc)
+	assert.Empty(m.container)
+	mu.Unlock()
+
+	m.Inc("six")
+	m.Inc("six")
+	mu.Lock()
+	assert.Equal(2, m.container["six"])
+	mu.Unlock()
 
 	m.Close()
 }

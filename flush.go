@@ -1,5 +1,5 @@
 package mtsdb
 
 func (m *Mtsdb) Flush() {
-	m.bulkInsert(true)
+	m.bulkInsert()
 }

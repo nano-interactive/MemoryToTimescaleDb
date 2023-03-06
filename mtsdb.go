@@ -5,19 +5,20 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"sync"
-	"sync/atomic"
+	"time"
 )
 
 type Config struct {
-	Size      int
-	InsertSQL string
+	Size           int
+	InsertSQL      string
+	InsertDuration time.Duration
 }
 
 type Mtsdb struct {
 	ChnErr chan error
 
 	config    Config
-	container map[string]*atomic.Uint64
+	container map[string]int
 	mu        sync.Mutex
 	wg        sync.WaitGroup
 	bulkFunc  func(*pgx.Batch)
@@ -35,9 +36,6 @@ func New(ctx context.Context, pool *pgxpool.Pool, configMtsdb ...Config) *Mtsdb 
 			Size: 100_000,
 		}
 	}
-	if config.Size <= 0 {
-		panic("mtsdb size has to be > 0")
-	}
 
 	if config.InsertSQL == "" {
 		config.InsertSQL = "INSERT INTO url_list (time,url,cnt) VALUES (NOW(),$1,$2)"
@@ -47,10 +45,29 @@ func New(ctx context.Context, pool *pgxpool.Pool, configMtsdb ...Config) *Mtsdb 
 		ctx:       ctx,
 		pool:      pool,
 		config:    config,
-		container: make(map[string]*atomic.Uint64, config.Size),
+		container: make(map[string]int, config.Size),
 		ChnErr:    make(chan error),
+	}
+	if config.InsertDuration > 0 {
+		m.config.Size = 0
+		go m.startTicker()
+	} else if config.Size <= 0 {
+		panic("mtsdb size has to be > 0")
 	}
 	m.bulkFunc = m.bulk
 
 	return m
+}
+
+func (m *Mtsdb) startTicker() {
+	ticker := time.NewTicker(m.config.InsertDuration)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			m.bulkInsert()
+		case <-m.ctx.Done():
+			return
+		}
+	}
 }

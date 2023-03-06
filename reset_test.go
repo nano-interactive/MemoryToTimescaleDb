@@ -29,14 +29,14 @@ func TestReset(t *testing.T) {
 	m.Inc("four")
 
 	assert.Equal(0, insertInc, "bulk insert should not be called")
-	assert.Equal(uint64(1), m.container["one"].Load())
-	assert.Equal(uint64(2), m.container["four"].Load())
+	assert.Equal(1, m.container["one"])
+	assert.Equal(2, m.container["four"])
 
 	m.Reset()
 
 	assert.Equal(0, insertInc, "bulk insert should not be called")
 	assert.Equal(0, len(m.container))
-	assert.Nil(m.container["one"])
+	assert.Empty(m.container)
 
 	m.Close()
 }

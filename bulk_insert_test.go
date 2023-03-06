@@ -4,7 +4,6 @@ import (
 	"context"
 	"github.com/jackc/pgx/v5"
 	"github.com/stretchr/testify/require"
-	"sync/atomic"
 	"testing"
 )
 
@@ -22,11 +21,11 @@ func TestInsert(t *testing.T) {
 		testCntBulkLen += batch.Len()
 	}
 
-	param := map[string]*atomic.Uint64{
-		"one":   {},
-		"two":   {},
-		"three": {},
-		"four":  {},
+	param := map[string]int{
+		"one":   1,
+		"two":   2,
+		"three": 3,
+		"four":  4,
 	}
 	m.insert(param)
 

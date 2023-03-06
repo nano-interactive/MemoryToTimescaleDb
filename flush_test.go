@@ -34,8 +34,8 @@ func TestFlush(t *testing.T) {
 	m.Inc("four")
 
 	assert.Equal(0, insertInc, "bulk insert should not be called")
-	assert.Equal(uint64(1), m.container["one"].Load())
-	assert.Equal(uint64(2), m.container["four"].Load())
+	assert.Equal(1, m.container["one"])
+	assert.Equal(2, m.container["four"])
 
 	m.Flush()
 	time.Sleep(2 * time.Millisecond)
@@ -43,7 +43,7 @@ func TestFlush(t *testing.T) {
 	assert.Equal(4, insertInc, "bulk insert should be called once")
 	assert.Equal(0, len(m.container))
 	mu.Unlock()
-	assert.Nil(m.container["one"])
+	assert.Empty(m.container)
 
 	assert.Empty(m.container)
 

@@ -1,7 +1,7 @@
 package mtsdb
 
 func (m *Mtsdb) Close() {
-	m.bulkInsert(false)
+	m.bulkInsert()
 	m.wg.Wait()
 	close(m.ChnErr)
 }
