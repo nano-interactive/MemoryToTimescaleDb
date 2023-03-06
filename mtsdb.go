@@ -2,6 +2,7 @@ package mtsdb
 
 import (
 	"context"
+	"fmt"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"sync"
@@ -65,6 +66,7 @@ func (m *Mtsdb) startTicker() {
 	for {
 		select {
 		case <-ticker.C:
+			fmt.Println("tick")
 			m.bulkInsert()
 		case <-m.ctx.Done():
 			return
