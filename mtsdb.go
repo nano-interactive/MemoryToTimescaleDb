@@ -9,12 +9,6 @@ import (
 	"time"
 )
 
-type Config struct {
-	Size           int
-	InsertSQL      string
-	InsertDuration time.Duration
-}
-
 type Mtsdb struct {
 	ChnErr chan error
 

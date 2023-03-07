@@ -17,7 +17,7 @@ func (m *Mtsdb) insert(container map[string]int) {
 	batch := &pgx.Batch{}
 	for key, item := range container {
 		batch.Queue(m.config.InsertSQL, key, item)
-		if batch.Len() >= 1000 {
+		if batch.Len() >= 1_000 {
 			m.bulkFunc(batch)
 			batch = &pgx.Batch{}
 		}
