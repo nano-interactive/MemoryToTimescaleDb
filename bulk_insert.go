@@ -1,7 +1,6 @@
 package mtsdb
 
 import (
-	"fmt"
 	"github.com/jackc/pgx/v5"
 	"time"
 )
@@ -30,12 +29,10 @@ func (m *Mtsdb) insert(container map[string]int) {
 
 // bulk insert
 func (m *Mtsdb) bulk(batch *pgx.Batch) {
-	tm := time.Now().UnixMicro()
+	tm := time.Now().UnixMilli()
 	m.wg.Add(1)
 	defer m.wg.Done()
-	fmt.Println("send")
 	br := m.pool.SendBatch(m.ctx, batch)
-	fmt.Println("send2")
 	//execute statements in batch queue
 	_, err := br.Exec()
 	if err != nil {
@@ -45,5 +42,6 @@ func (m *Mtsdb) bulk(batch *pgx.Batch) {
 	if err != nil {
 		m.ChnErr <- err
 	}
-	fmt.Println("spent ", time.Now().UnixMicro()-tm, "len", batch.Len())
+	m.Inserts.Add(uint64(batch.Len()))
+	m.DurationMs.Add(uint64(time.Now().UnixMilli() - tm))
 }

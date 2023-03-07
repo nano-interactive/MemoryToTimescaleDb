@@ -2,10 +2,10 @@ package mtsdb
 
 import (
 	"context"
-	"fmt"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -25,6 +25,10 @@ type Mtsdb struct {
 	bulkFunc  func(*pgx.Batch)
 	pool      *pgxpool.Pool
 	ctx       context.Context
+
+	// stats
+	Inserts    atomic.Uint64
+	DurationMs atomic.Uint64
 }
 
 // New initialize maps and ticks, size has to be > 0
@@ -43,11 +47,13 @@ func New(ctx context.Context, pool *pgxpool.Pool, configMtsdb ...Config) *Mtsdb 
 	}
 
 	m := &Mtsdb{
-		ctx:       ctx,
-		pool:      pool,
-		config:    config,
-		container: make(map[string]int, config.Size),
-		ChnErr:    make(chan error),
+		ctx:        ctx,
+		pool:       pool,
+		config:     config,
+		container:  make(map[string]int, config.Size),
+		ChnErr:     make(chan error),
+		Inserts:    atomic.Uint64{},
+		DurationMs: atomic.Uint64{},
 	}
 	if config.InsertDuration > 0 {
 		m.config.Size = 0
@@ -66,7 +72,6 @@ func (m *Mtsdb) startTicker() {
 	for {
 		select {
 		case <-ticker.C:
-			fmt.Println("tick")
 			m.bulkInsert()
 		case <-m.ctx.Done():
 			return
