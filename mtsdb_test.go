@@ -126,7 +126,6 @@ func TestPanic(t *testing.T) {
 
 func BenchmarkAdd(b *testing.B) {
 	b.ReportAllocs()
-	b.ResetTimer()
 
 	gofakeit.Seed(100)
 	urls := make([]string, 20_000)
@@ -144,6 +143,7 @@ func BenchmarkAdd(b *testing.B) {
 
 	rnd := rand.New(rand.NewSource(100))
 
+	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		m.Inc(urls[rnd.Intn(10_000)])
 	}

@@ -21,8 +21,8 @@ type Mtsdb struct {
 	ctx       context.Context
 
 	// stats
-	Inserts    atomic.Uint64
-	DurationMs atomic.Uint64
+	MetricInserts    atomic.Uint64
+	MetricDurationMs atomic.Uint64
 }
 
 // New initialize maps and ticks, size has to be > 0
@@ -41,13 +41,13 @@ func New(ctx context.Context, pool *pgxpool.Pool, configMtsdb ...Config) *Mtsdb 
 	}
 
 	m := &Mtsdb{
-		ctx:        ctx,
-		pool:       pool,
-		config:     config,
-		container:  make(map[string]int, config.Size),
-		ChnErr:     make(chan error),
-		Inserts:    atomic.Uint64{},
-		DurationMs: atomic.Uint64{},
+		ctx:              ctx,
+		pool:             pool,
+		config:           config,
+		container:        make(map[string]int, config.Size),
+		ChnErr:           make(chan error),
+		MetricInserts:    atomic.Uint64{},
+		MetricDurationMs: atomic.Uint64{},
 	}
 	if config.InsertDuration > 0 {
 		m.config.Size = 0

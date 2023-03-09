@@ -42,6 +42,6 @@ func (m *Mtsdb) bulk(batch *pgx.Batch) {
 	if err != nil {
 		m.ChnErr <- err
 	}
-	m.Inserts.Add(uint64(batch.Len()))
-	m.DurationMs.Add(uint64(time.Now().UnixMilli() - tm))
+	m.MetricInserts.Add(uint64(batch.Len()))
+	m.MetricDurationMs.Add(uint64(time.Now().UnixMilli() - tm))
 }
