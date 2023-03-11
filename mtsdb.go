@@ -32,7 +32,8 @@ func New(ctx context.Context, pool *pgxpool.Pool, configMtsdb ...Config) *Mtsdb 
 		config = configMtsdb[0]
 	} else {
 		config = Config{
-			Size: 100_000,
+			Size:       100_000,
+			UseFnvHash: false,
 		}
 	}
 

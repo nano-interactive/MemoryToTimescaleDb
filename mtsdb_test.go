@@ -150,3 +150,31 @@ func BenchmarkAdd(b *testing.B) {
 
 	m.Close()
 }
+
+func BenchmarkFnvAdd(b *testing.B) {
+	b.ReportAllocs()
+
+	gofakeit.Seed(100)
+	urls := make([]string, 20_000)
+	for i := 0; i < 20_000; i++ {
+		urls[i] = gofakeit.URL()
+	}
+
+	tstConfig := Config{
+		Size:       10_000,
+		InsertSQL:  "",
+		UseFnvHash: true,
+	}
+
+	m := New(context.Background(), nil, tstConfig)
+	m.bulkFunc = func(batch *pgx.Batch) {}
+
+	rnd := rand.New(rand.NewSource(100))
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		m.Inc(urls[rnd.Intn(10_000)])
+	}
+
+	m.Close()
+}
