@@ -1,6 +1,9 @@
 package mtsdb
 
 func (m *Mtsdb) Inc(url string) {
+	if url == "" {
+		return
+	}
 	m.mu.Lock()
 	if _, ok := m.container[url]; ok == false {
 		m.container[url] = 0
