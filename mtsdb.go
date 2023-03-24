@@ -23,7 +23,7 @@ type Mtsdb struct {
 
 var DefaultConfig = Config{
 	Size:           100_000,
-	Hash64:         nil,
+	Hasher:         nil,
 	InsertDuration: 1 * time.Minute,
 	InsertSQL:      "INSERT INTO url_list (time,url,cnt) VALUES (now(),$1,$2)",
 }
@@ -69,6 +69,7 @@ func (m *Mtsdb) startTicker(ctx context.Context, interval time.Duration) {
 		case <-ticker.C:
 			m.insert(ctx, m.reset(true))
 		case <-ctx.Done():
+			m.insert(context.Background(), m.reset(true))
 			return
 		}
 	}
