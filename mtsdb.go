@@ -10,6 +10,8 @@ import (
 
 type Mtsdb struct {
 	err       chan error
+	closed    chan struct{}
+	cancel    context.CancelFunc
 	pool      *pgxpool.Pool
 	container atomic.Pointer[sync.Map]
 
@@ -40,18 +42,22 @@ func New(ctx context.Context, pool *pgxpool.Pool, configMtsdb ...Config) *Mtsdb 
 		}
 	}
 
+	newCtx, cancel := context.WithCancel(ctx)
+
 	m := &Mtsdb{
 		pool:             pool,
 		config:           config,
+		cancel:           cancel,
 		container:        atomic.Pointer[sync.Map]{},
 		err:              make(chan error, 100),
+		closed:           make(chan struct{}, 1),
 		containerLen:     atomic.Uint64{},
 		MetricInserts:    atomic.Uint64{},
 		MetricDurationMs: atomic.Uint64{},
 	}
 
 	if config.InsertDuration > 0 {
-		go m.startTicker(ctx, config.InsertDuration)
+		go m.startTicker(newCtx, config.InsertDuration)
 	}
 
 	return m

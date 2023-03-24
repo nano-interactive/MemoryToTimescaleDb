@@ -10,6 +10,12 @@ func (m *Mtsdb) Inc(ctx context.Context, url string) {
 		return
 	}
 
+	select {
+	case <-m.closed:
+		return
+	default:
+	}
+
 	if m.config.Size != 0 && m.containerLen.CompareAndSwap(m.config.Size, 0) {
 		old := m.reset(false)
 		go m.insert(ctx, old)
