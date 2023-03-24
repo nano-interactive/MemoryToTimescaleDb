@@ -32,7 +32,7 @@ func TestReset(t *testing.T) {
 	assert.Equal(1, m.container["one"])
 	assert.Equal(2, m.container["four"])
 
-	m.Reset()
+	m.reset()
 
 	assert.Equal(0, insertInc, "bulk insert should not be called")
 	assert.Equal(0, len(m.container))

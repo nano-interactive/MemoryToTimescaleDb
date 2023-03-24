@@ -1,5 +1,7 @@
 package mtsdb
 
-func (m *Mtsdb) Flush() {
-	m.bulkInsert()
+import "context"
+
+func (m *Mtsdb) Flush(ctx context.Context) {
+	m.insert(ctx, m.reset(true))
 }

@@ -1,7 +1,10 @@
 package mtsdb
 
-func (m *Mtsdb) Reset() {
-	m.mu.Lock()
-	m.container = make(map[string]int, m.config.Size)
-	m.mu.Unlock()
+import "sync"
+
+func (m *Mtsdb) reset(resetCounter bool) *sync.Map {
+	if resetCounter {
+		m.containerLen.Store(0)
+	}
+	return m.container.Swap(&sync.Map{})
 }

@@ -1,17 +1,9 @@
 package mtsdb
 
-import (
-	"sync/atomic"
-)
-
 func (m *Mtsdb) Stats() (uint64, uint64) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	r1 := m.MetricInserts.Load()
-	r2 := m.MetricDurationMs.Load()
-	if r2 > 1e15 {
-		m.MetricInserts = atomic.Uint64{}
-		m.MetricDurationMs = atomic.Uint64{}
+	if m.MetricDurationMs.CompareAndSwap(1e15, 0) {
+		m.MetricInserts.Store(0)
 	}
-	return r1, r2
+
+	return m.MetricInserts.Load(), m.MetricDurationMs.Load()
 }

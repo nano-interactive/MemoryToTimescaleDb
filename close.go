@@ -1,7 +1,10 @@
 package mtsdb
 
-func (m *Mtsdb) Close() {
-	m.bulkInsert()
-	m.wg.Wait()
-	close(m.ChnErr)
+import "context"
+
+func (m *Mtsdb) Close() error {
+	m.insert(context.Background(), m.reset(true))
+	close(m.err)
+
+	return nil
 }
