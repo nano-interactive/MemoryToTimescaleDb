@@ -3,6 +3,7 @@ package mtsdb
 import (
 	"context"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -18,10 +19,10 @@ func (m *Mtsdb) insert(mapToInsert *sync.Map) {
 			if err != nil {
 				m.err <- err
 			} else {
-				batch.Queue(m.config.InsertSQL, h.Sum32(), value)
+				batch.Queue(m.config.InsertSQL, h.Sum32(), value.(*atomic.Uint64).Load())
 			}
 		} else {
-			batch.Queue(m.config.InsertSQL, key, value)
+			batch.Queue(m.config.InsertSQL, key, value.(*atomic.Uint64).Load())
 		}
 
 		if batch.Len() >= 1_000 {
