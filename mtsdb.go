@@ -12,6 +12,7 @@ import (
 type Mtsdb struct {
 	err       chan error
 	ctx       context.Context
+	wg        sync.WaitGroup
 	cancel    context.CancelFunc
 	pool      *pgxpool.Pool
 	container atomic.Pointer[sync.Map]
@@ -54,7 +55,7 @@ func New(ctx context.Context, pool *pgxpool.Pool, configMtsdb ...Config) *Mtsdb 
 		ctx:              newCtx,
 		cancel:           cancel,
 		container:        atomic.Pointer[sync.Map]{},
-		err:              make(chan error, 100),
+		err:              make(chan error, 0),
 		containerLen:     atomic.Uint64{},
 		MetricInserts:    atomic.Uint64{},
 		MetricDurationMs: atomic.Uint64{},

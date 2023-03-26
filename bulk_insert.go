@@ -10,6 +10,8 @@ import (
 )
 
 func (m *Mtsdb) insert(mapToInsert *sync.Map) {
+	m.wg.Add(1)
+	defer m.wg.Done()
 	batch := new(pgx.Batch)
 
 	mapToInsert.Range(func(key, value any) bool {
@@ -42,17 +44,17 @@ func (m *Mtsdb) insert(mapToInsert *sync.Map) {
 func (m *Mtsdb) bulk(batch *pgx.Batch) {
 	tm := time.Now().UnixMilli()
 	br := m.pool.SendBatch(context.Background(), batch)
-	_, err := br.Exec()
-	if err != nil {
-		m.err <- err
-		return
-	}
 	defer func(br pgx.BatchResults) {
 		err := br.Close()
 		if err != nil {
 			m.err <- err
 		}
 	}(br)
+	_, err := br.Exec()
+	if err != nil {
+		m.err <- err
+		return
+	}
 	m.MetricInserts.Add(uint64(batch.Len()))
 	m.MetricDurationMs.Add(uint64(time.Now().UnixMilli() - tm))
 }
