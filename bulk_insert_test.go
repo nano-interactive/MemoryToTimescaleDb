@@ -4,6 +4,9 @@ import (
 	"context"
 	"github.com/jackc/pgx/v5"
 	"github.com/stretchr/testify/require"
+	"hash/fnv"
+	"sync"
+	"sync/atomic"
 	"testing"
 )
 
@@ -13,20 +16,21 @@ func TestInsert(t *testing.T) {
 
 	tstConfig := Config{
 		Size:      3,
-		InsertSQL: "",
+		InsertSQL: "test",
 	}
 	m := New(context.Background(), nil, tstConfig)
 	m.bulkFunc = func(batch *pgx.Batch) {
 		testCntBulkLen += batch.Len()
 	}
 
-	param := map[string]int{
-		"one":   1,
-		"two":   2,
-		"three": 3,
-		"four":  4,
-	}
-	m.insert(param)
+	param := sync.Map{}
+	one := &atomic.Uint64{}
+	one.Add(1)
+	param.Store("one", one)
+	param.Store("two", one)
+	param.Store("three", one)
+	param.Store("four", one)
+	m.insert(&param)
 
 	assert.Equal(4, testCntBulkLen)
 
@@ -35,23 +39,27 @@ func TestInsert(t *testing.T) {
 func TestFnvInsert(t *testing.T) {
 	assert := require.New(t)
 	var testCntBulkLen int
+	f := func() Hasher {
+		return fnv.New32a()
+	}
 	tstConfig := Config{
-		Size:       3,
-		InsertSQL:  "",
-		UseFnvHash: true,
+		Size:      3,
+		InsertSQL: "test",
+		Hasher:    f,
 	}
 	m := New(context.Background(), nil, tstConfig)
 	m.bulkFunc = func(batch *pgx.Batch) {
 		testCntBulkLen += batch.Len()
 	}
 
-	param := map[string]int{
-		"one":   1,
-		"two":   2,
-		"three": 3,
-		"four":  4,
-	}
-	m.insert(param)
+	param := sync.Map{}
+	one := &atomic.Uint64{}
+	one.Add(1)
+	param.Store("one", one)
+	param.Store("two", one)
+	param.Store("three", one)
+	param.Store("four", one)
+	m.insert(&param)
 
 	assert.Equal(4, testCntBulkLen)
 

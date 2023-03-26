@@ -5,8 +5,9 @@ import (
 	"github.com/brianvoe/gofakeit/v6"
 	"github.com/jackc/pgx/v5"
 	"github.com/stretchr/testify/require"
+	"hash/fnv"
 	"math/rand"
-	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -14,19 +15,16 @@ import (
 func TestNew(t *testing.T) {
 	assert := require.New(t)
 
-	var mu sync.Mutex
-
-	insertInc := 0
+	insertInc := atomic.Uint64{}
 
 	tstConfig := Config{
-		Size:      5,
-		InsertSQL: "",
+		Size:           5,
+		InsertSQL:      "test",
+		InsertDuration: 0,
 	}
 	m := New(context.Background(), nil, tstConfig)
 	m.bulkFunc = func(batch *pgx.Batch) {
-		mu.Lock()
-		defer mu.Unlock()
-		insertInc += batch.Len()
+		insertInc.Add(uint64(batch.Len()))
 	}
 
 	m.Inc("one")
@@ -35,44 +33,40 @@ func TestNew(t *testing.T) {
 	m.Inc("four")
 	m.Inc("three")
 	m.Inc("four")
-	assert.Equal(0, insertInc, "bulk insert should not be called")
-	assert.Equal(1, m.container["one"])
-	assert.Equal(2, m.container["four"])
+	checkOne, _ := m.container.Load().Load("one")
+	checkFour, _ := m.container.Load().Load("four")
+
+	assert.Equal(uint64(0), insertInc.Load(), "bulk insert should not be called")
+	assert.Equal(uint64(1), checkOne.(*atomic.Uint64).Load())
+	assert.Equal(uint64(2), checkFour.(*atomic.Uint64).Load())
+	assert.Equal(uint64(4), m.containerLen.Load())
 
 	m.Inc("five")
 	time.Sleep(2 * time.Millisecond)
-	mu.Lock()
-	assert.Equal(5, insertInc)
-	mu.Unlock()
-
-	m.mu.Lock()
-	assert.Equal(0, len(m.container))
-	m.mu.Unlock()
+	assert.Equal(uint64(5), insertInc.Load())
+	assert.Equal(uint64(0), m.containerLen.Load())
 
 	m.Inc("six")
 	m.Inc("six")
-	assert.Equal(2, m.container["six"])
+	checkSix, _ := m.container.Load().Load("six")
+	assert.Equal(uint64(2), checkSix.(*atomic.Uint64).Load())
 
-	m.Close()
+	_ = m.Close()
 }
 
 func TestTick(t *testing.T) {
 	assert := require.New(t)
 
-	var mu sync.Mutex
-
-	insertInc := 0
+	insertInc := atomic.Uint64{}
 
 	tstConfig := Config{
-		Size:           1,
-		InsertSQL:      "",
+		Size:           0,
+		InsertSQL:      "test",
 		InsertDuration: 100 * time.Millisecond,
 	}
 	m := New(context.Background(), nil, tstConfig)
 	m.bulkFunc = func(batch *pgx.Batch) {
-		mu.Lock()
-		defer mu.Unlock()
-		insertInc += batch.Len()
+		insertInc.Add(uint64(batch.Len()))
 	}
 
 	m.Inc("one")
@@ -82,33 +76,38 @@ func TestTick(t *testing.T) {
 	m.Inc("five")
 	m.Inc("three")
 	m.Inc("four")
-	assert.Equal(0, insertInc, "bulk insert should not be called")
-	assert.Equal(1, m.container["one"])
-	assert.Equal(2, m.container["four"])
-
+	checkOne, _ := m.container.Load().Load("one")
+	checkFour, _ := m.container.Load().Load("four")
+	assert.Equal(uint64(0), insertInc.Load(), "bulk insert should not be called")
+	assert.Equal(uint64(1), checkOne.(*atomic.Uint64).Load())
+	assert.Equal(uint64(2), checkFour.(*atomic.Uint64).Load())
+	assert.Equal(uint64(5), m.containerLen.Load())
+	//
 	time.Sleep(110 * time.Millisecond)
-	mu.Lock()
-	assert.Equal(5, insertInc)
-	assert.Empty(m.container)
-	mu.Unlock()
-
+	assert.Equal(uint64(5), insertInc.Load())
+	assert.Equal(uint64(0), m.containerLen.Load())
+	_, ok := m.container.Load().Load("one")
+	assert.False(ok)
 	m.Inc("six")
 	m.Inc("six")
-	mu.Lock()
-	assert.Equal(2, m.container["six"])
-	mu.Unlock()
+	checkSix, _ := m.container.Load().Load("six")
+	assert.Equal(uint64(2), checkSix.(*atomic.Uint64).Load())
 
-	m.Close()
+	_ = m.Close()
 }
 
 func TestInitConfig(t *testing.T) {
 	assert := require.New(t)
 
 	m := New(context.Background(), nil)
+	assert.Equal(uint64(0), m.config.Size)
+	_ = m.Close()
 
-	assert.Equal(100_000, m.config.Size)
+	m2 := New(context.Background(), nil, Config{Size: 100_000, InsertSQL: "test", InsertDuration: 2 * time.Minute})
+	assert.Equal(uint64(100_000), m2.config.Size)
+	assert.Equal(2*time.Minute, m2.config.InsertDuration)
+	_ = m2.Close()
 
-	m.Close()
 }
 
 func TestPanic(t *testing.T) {
@@ -135,11 +134,11 @@ func BenchmarkAdd(b *testing.B) {
 
 	tstConfig := Config{
 		Size:      10_000,
-		InsertSQL: "",
+		InsertSQL: "test",
 	}
 
 	m := New(context.Background(), nil, tstConfig)
-	m.bulkFunc = func(batch *pgx.Batch) {}
+	m.bulkFunc = func(*pgx.Batch) {}
 
 	rnd := rand.New(rand.NewSource(100))
 
@@ -148,7 +147,7 @@ func BenchmarkAdd(b *testing.B) {
 		m.Inc(urls[rnd.Intn(10_000)])
 	}
 
-	m.Close()
+	_ = m.Close()
 }
 
 func BenchmarkFnvAdd(b *testing.B) {
@@ -160,14 +159,17 @@ func BenchmarkFnvAdd(b *testing.B) {
 		urls[i] = gofakeit.URL()
 	}
 
+	f := func() Hasher {
+		return fnv.New32a()
+	}
 	tstConfig := Config{
-		Size:       10_000,
-		InsertSQL:  "",
-		UseFnvHash: true,
+		Size:      10_000,
+		InsertSQL: "test",
+		Hasher:    f,
 	}
 
 	m := New(context.Background(), nil, tstConfig)
-	m.bulkFunc = func(batch *pgx.Batch) {}
+	m.bulkFunc = func(*pgx.Batch) {}
 
 	rnd := rand.New(rand.NewSource(100))
 
@@ -176,5 +178,5 @@ func BenchmarkFnvAdd(b *testing.B) {
 		m.Inc(urls[rnd.Intn(10_000)])
 	}
 
-	m.Close()
+	_ = m.Close()
 }

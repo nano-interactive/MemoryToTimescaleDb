@@ -13,7 +13,7 @@ func TestStats(t *testing.T) {
 
 	tstConfig := Config{
 		Size:      5,
-		InsertSQL: "",
+		InsertSQL: "test",
 	}
 	m := New(context.Background(), nil, tstConfig)
 	m.bulkFunc = func(batch *pgx.Batch) {
@@ -35,5 +35,5 @@ func TestStats(t *testing.T) {
 	assert.Equal(uint64(5), inserts)
 	assert.Equal(uint64(100_000), dur)
 
-	m.Close()
+	_ = m.Close()
 }

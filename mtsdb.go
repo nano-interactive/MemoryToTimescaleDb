@@ -2,6 +2,7 @@ package mtsdb
 
 import (
 	"context"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"sync"
 	"sync/atomic"
@@ -10,7 +11,7 @@ import (
 
 type Mtsdb struct {
 	err       chan error
-	closed    chan struct{}
+	ctx       context.Context
 	cancel    context.CancelFunc
 	pool      *pgxpool.Pool
 	container atomic.Pointer[sync.Map]
@@ -18,13 +19,16 @@ type Mtsdb struct {
 	config       Config
 	containerLen atomic.Uint64
 
+	// bulk func
+	bulkFunc func(*pgx.Batch)
+
 	// stats
 	MetricInserts    atomic.Uint64
 	MetricDurationMs atomic.Uint64
 }
 
 var DefaultConfig = Config{
-	Size:           100_000,
+	Size:           0,
 	Hasher:         nil,
 	InsertDuration: 1 * time.Minute,
 	InsertSQL:      "INSERT INTO url_list (time,url,cnt) VALUES (now(),$1,$2)",
@@ -47,14 +51,17 @@ func New(ctx context.Context, pool *pgxpool.Pool, configMtsdb ...Config) *Mtsdb 
 	m := &Mtsdb{
 		pool:             pool,
 		config:           config,
+		ctx:              newCtx,
 		cancel:           cancel,
 		container:        atomic.Pointer[sync.Map]{},
 		err:              make(chan error, 100),
-		closed:           make(chan struct{}, 1),
 		containerLen:     atomic.Uint64{},
 		MetricInserts:    atomic.Uint64{},
 		MetricDurationMs: atomic.Uint64{},
 	}
+	m.container.Store(&sync.Map{})
+
+	m.bulkFunc = m.bulk
 
 	if config.InsertDuration > 0 {
 		go m.startTicker(newCtx, config.InsertDuration)
@@ -73,9 +80,8 @@ func (m *Mtsdb) startTicker(ctx context.Context, interval time.Duration) {
 	for {
 		select {
 		case <-ticker.C:
-			m.insert(ctx, m.reset(true))
+			m.insert(m.reset(true))
 		case <-ctx.Done():
-			m.insert(context.Background(), m.reset(true))
 			return
 		}
 	}

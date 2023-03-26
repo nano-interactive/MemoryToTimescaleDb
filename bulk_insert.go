@@ -8,7 +8,7 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-func (m *Mtsdb) insert(ctx context.Context, mapToInsert *sync.Map) {
+func (m *Mtsdb) insert(mapToInsert *sync.Map) {
 	batch := new(pgx.Batch)
 
 	mapToInsert.Range(func(key, value any) bool {
@@ -25,7 +25,7 @@ func (m *Mtsdb) insert(ctx context.Context, mapToInsert *sync.Map) {
 		}
 
 		if batch.Len() >= 1_000 {
-			m.bulk(ctx, batch)
+			m.bulkFunc(batch)
 			batch = &pgx.Batch{}
 		}
 
@@ -33,14 +33,14 @@ func (m *Mtsdb) insert(ctx context.Context, mapToInsert *sync.Map) {
 	})
 
 	if batch.Len() > 0 {
-		m.bulk(ctx, batch)
+		m.bulkFunc(batch)
 	}
 }
 
 // bulk insert
-func (m *Mtsdb) bulk(ctx context.Context, batch *pgx.Batch) {
+func (m *Mtsdb) bulk(batch *pgx.Batch) {
 	tm := time.Now().UnixMilli()
-	br := m.pool.SendBatch(ctx, batch)
+	br := m.pool.SendBatch(context.Background(), batch)
 	_, err := br.Exec()
 	if err != nil {
 		m.err <- err

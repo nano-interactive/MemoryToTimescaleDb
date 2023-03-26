@@ -1,30 +1,26 @@
 package mtsdb
 
 import (
-	"context"
 	"sync/atomic"
 )
 
-func (m *Mtsdb) Inc(ctx context.Context, url string) {
+func (m *Mtsdb) Inc(url string) {
 	if url == "" {
 		return
 	}
 
-	select {
-	case <-m.closed:
+	if m.ctx.Err() != nil { // no more inserts
 		return
-	default:
+	}
+
+	value, loaded := m.container.Load().LoadOrStore(url, &atomic.Uint64{})
+	if !loaded {
+		m.containerLen.Add(1)
 	}
 
 	if m.config.Size != 0 && m.containerLen.CompareAndSwap(m.config.Size, 0) {
 		old := m.reset(false)
-		go m.insert(ctx, old)
-	}
-
-	value, loaded := m.container.Load().LoadOrStore(url, &atomic.Uint64{})
-
-	if !loaded {
-		m.containerLen.Add(1)
+		go m.insert(old)
 	}
 
 	value.(*atomic.Uint64).Add(1)
