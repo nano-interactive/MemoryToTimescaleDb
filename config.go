@@ -11,8 +11,10 @@ type Hasher interface {
 }
 
 type Config struct {
-	Size           uint64
-	InsertSQL      string
-	InsertDuration time.Duration
-	Hasher         func() Hasher
+	Size            uint64
+	InsertSQL       string
+	InsertDuration  time.Duration
+	Hasher          func() Hasher
+	WorkerPoolSize  int
+	BatchInsertSize int // timescale batch insert length
 }

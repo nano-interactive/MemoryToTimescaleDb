@@ -18,9 +18,11 @@ func TestNew(t *testing.T) {
 	insertInc := atomic.Uint64{}
 
 	tstConfig := Config{
-		Size:           5,
-		InsertSQL:      "test",
-		InsertDuration: 0,
+		Size:            5,
+		InsertSQL:       "test",
+		InsertDuration:  0,
+		WorkerPoolSize:  5,
+		BatchInsertSize: 1000,
 	}
 	m := New(context.Background(), nil, tstConfig)
 	m.bulkFunc = func(batch *pgx.Batch) {
@@ -43,6 +45,7 @@ func TestNew(t *testing.T) {
 
 	m.Inc("five")
 	time.Sleep(2 * time.Millisecond)
+
 	assert.Equal(uint64(5), insertInc.Load())
 	assert.Equal(uint64(0), m.containerLen.Load())
 
@@ -101,11 +104,21 @@ func TestInitConfig(t *testing.T) {
 
 	m := New(context.Background(), nil)
 	assert.Equal(uint64(0), m.config.Size)
+	assert.Equal(5, m.config.WorkerPoolSize)
+	assert.Equal(1_000, m.config.BatchInsertSize)
 	_ = m.Close()
 
-	m2 := New(context.Background(), nil, Config{Size: 100_000, InsertSQL: "test", InsertDuration: 2 * time.Minute})
+	m2 := New(context.Background(), nil, Config{
+		Size:            100_000,
+		InsertSQL:       "test",
+		InsertDuration:  2 * time.Minute,
+		WorkerPoolSize:  3,
+		BatchInsertSize: 2_000,
+	})
 	assert.Equal(uint64(100_000), m2.config.Size)
 	assert.Equal(2*time.Minute, m2.config.InsertDuration)
+	assert.Equal(3, m2.config.WorkerPoolSize)
+	assert.Equal(2_000, m2.config.BatchInsertSize)
 	_ = m2.Close()
 
 }
@@ -133,8 +146,10 @@ func BenchmarkAdd(b *testing.B) {
 	}
 
 	tstConfig := Config{
-		Size:      10_000,
-		InsertSQL: "test",
+		Size:            10_000,
+		InsertSQL:       "test",
+		WorkerPoolSize:  5,
+		BatchInsertSize: 1000,
 	}
 
 	m := New(context.Background(), nil, tstConfig)
@@ -163,9 +178,11 @@ func BenchmarkFnvAdd(b *testing.B) {
 		return fnv.New32a()
 	}
 	tstConfig := Config{
-		Size:      10_000,
-		InsertSQL: "test",
-		Hasher:    f,
+		Size:            10_000,
+		InsertSQL:       "test",
+		Hasher:          f,
+		WorkerPoolSize:  5,
+		BatchInsertSize: 1000,
 	}
 
 	m := New(context.Background(), nil, tstConfig)

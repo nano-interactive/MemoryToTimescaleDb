@@ -14,8 +14,10 @@ func TestIncEmptyString(t *testing.T) {
 	insertInc := atomic.Uint64{}
 
 	tstConfig := Config{
-		Size:      5,
-		InsertSQL: "test",
+		Size:            5,
+		InsertSQL:       "test",
+		WorkerPoolSize:  5,
+		BatchInsertSize: 1000,
 	}
 	m := New(context.Background(), nil, tstConfig)
 	m.bulkFunc = func(batch *pgx.Batch) {

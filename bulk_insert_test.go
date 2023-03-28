@@ -15,8 +15,10 @@ func TestInsert(t *testing.T) {
 	assert := require.New(t)
 
 	tstConfig := Config{
-		Size:      3,
-		InsertSQL: "test",
+		Size:            3,
+		InsertSQL:       "test",
+		WorkerPoolSize:  5,
+		BatchInsertSize: 1000,
 	}
 	m := New(context.Background(), nil, tstConfig)
 	m.bulkFunc = func(batch *pgx.Batch) {
@@ -43,9 +45,11 @@ func TestFnvInsert(t *testing.T) {
 		return fnv.New32a()
 	}
 	tstConfig := Config{
-		Size:      3,
-		InsertSQL: "test",
-		Hasher:    f,
+		Size:            3,
+		InsertSQL:       "test",
+		Hasher:          f,
+		WorkerPoolSize:  5,
+		BatchInsertSize: 1000,
 	}
 	m := New(context.Background(), nil, tstConfig)
 	m.bulkFunc = func(batch *pgx.Batch) {

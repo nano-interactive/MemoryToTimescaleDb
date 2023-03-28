@@ -20,7 +20,7 @@ func (m *Mtsdb) Inc(url string) {
 
 	if m.config.Size != 0 && m.containerLen.CompareAndSwap(m.config.Size, 0) {
 		old := m.reset(false)
-		go m.insert(old)
+		m.job <- old
 	}
 
 	value.(*atomic.Uint64).Add(1)

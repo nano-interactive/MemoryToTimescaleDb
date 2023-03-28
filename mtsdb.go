@@ -11,6 +11,7 @@ import (
 
 type Mtsdb struct {
 	err       chan error
+	job       chan *sync.Map
 	ctx       context.Context
 	wg        sync.WaitGroup
 	cancel    context.CancelFunc
@@ -29,10 +30,12 @@ type Mtsdb struct {
 }
 
 var DefaultConfig = Config{
-	Size:           0,
-	Hasher:         nil,
-	InsertDuration: 1 * time.Minute,
-	InsertSQL:      "INSERT INTO url_list (time,url,cnt) VALUES (now(),$1,$2)",
+	Size:            0,
+	Hasher:          nil,
+	InsertDuration:  1 * time.Minute,
+	InsertSQL:       "INSERT" + " INTO url_list (time,url,cnt) VALUES (now(),$1,$2)",
+	WorkerPoolSize:  5,
+	BatchInsertSize: 1_000,
 }
 
 // New initialize maps and ticks, size has to be > 0
@@ -45,6 +48,14 @@ func New(ctx context.Context, pool *pgxpool.Pool, configMtsdb ...Config) *Mtsdb 
 		if config.InsertSQL == "" {
 			panic("insert sql is empty")
 		}
+		if config.Size > 0 {
+			if config.WorkerPoolSize < 1 {
+				panic("worker pool size has to be > 0")
+			}
+			if config.BatchInsertSize < 1 {
+				panic("batch insert size has to be > 0")
+			}
+		}
 	}
 
 	newCtx, cancel := context.WithCancel(ctx)
@@ -56,6 +67,7 @@ func New(ctx context.Context, pool *pgxpool.Pool, configMtsdb ...Config) *Mtsdb 
 		cancel:           cancel,
 		container:        atomic.Pointer[sync.Map]{},
 		err:              make(chan error, 0),
+		job:              make(chan *sync.Map, config.WorkerPoolSize),
 		containerLen:     atomic.Uint64{},
 		MetricInserts:    atomic.Uint64{},
 		MetricDurationMs: atomic.Uint64{},
@@ -63,6 +75,11 @@ func New(ctx context.Context, pool *pgxpool.Pool, configMtsdb ...Config) *Mtsdb 
 	m.container.Store(&sync.Map{})
 
 	m.bulkFunc = m.bulk
+
+	// initialize worker pool
+	for i := 0; i < config.WorkerPoolSize; i++ {
+		go m.worker()
+	}
 
 	if config.InsertDuration > 0 {
 		go m.startTicker(newCtx, config.InsertDuration)

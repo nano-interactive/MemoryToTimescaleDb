@@ -27,7 +27,7 @@ func (m *Mtsdb) insert(mapToInsert *sync.Map) {
 			batch.Queue(m.config.InsertSQL, key, value.(*atomic.Uint64).Load())
 		}
 
-		if batch.Len() >= 1_000 {
+		if batch.Len() >= m.config.BatchInsertSize {
 			m.bulkFunc(batch)
 			batch = &pgx.Batch{}
 		}

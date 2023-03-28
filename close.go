@@ -6,5 +6,6 @@ func (m *Mtsdb) Close() error {
 	// wait for postgres batch to finish
 	m.wg.Wait()
 	close(m.err)
+	close(m.job)
 	return nil
 }

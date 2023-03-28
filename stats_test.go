@@ -12,8 +12,10 @@ func TestStats(t *testing.T) {
 	assert := require.New(t)
 
 	tstConfig := Config{
-		Size:      5,
-		InsertSQL: "test",
+		Size:            5,
+		InsertSQL:       "test",
+		WorkerPoolSize:  5,
+		BatchInsertSize: 1000,
 	}
 	m := New(context.Background(), nil, tstConfig)
 	m.bulkFunc = func(batch *pgx.Batch) {

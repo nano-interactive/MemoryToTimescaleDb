@@ -6,7 +6,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"sync/atomic"
 	"testing"
-	"time"
 )
 
 func TestClose(t *testing.T) {
@@ -15,8 +14,10 @@ func TestClose(t *testing.T) {
 	insertInc := atomic.Uint64{}
 
 	tstConfig := Config{
-		Size:      5,
-		InsertSQL: "test",
+		Size:            5,
+		InsertSQL:       "test",
+		WorkerPoolSize:  5,
+		BatchInsertSize: 1000,
 	}
 	m := New(context.Background(), nil, tstConfig)
 	m.bulkFunc = func(batch *pgx.Batch) {
@@ -38,7 +39,6 @@ func TestClose(t *testing.T) {
 	assert.Equal(uint64(4), m.containerLen.Load())
 
 	_ = m.Close()
-	time.Sleep(2 * time.Millisecond)
 
 	assert.Equal(uint64(4), insertInc.Load())
 	assert.Equal(uint64(0), m.containerLen.Load())
