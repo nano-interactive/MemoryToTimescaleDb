@@ -1,38 +1,40 @@
 package mtsdb
 
 import (
-	"github.com/jackc/pgx/v5"
-	"hash/fnv"
+	"context"
+	"sync"
+	"sync/atomic"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 )
 
-func (m *Mtsdb) bulkInsert() {
-	m.mu.Lock()
-	insertContainer := m.container
-	m.container = make(map[string]int)
-	m.mu.Unlock()
-	m.insert(insertContainer)
-}
+func (m *Mtsdb) insert(mapToInsert *sync.Map) {
+	m.wg.Add(1)
+	defer m.wg.Done()
+	batch := new(pgx.Batch)
 
-func (m *Mtsdb) insert(container map[string]int) {
-	batch := &pgx.Batch{}
-	for key, item := range container {
-		if m.config.UseFnvHash {
-			h := fnv.New32a()
-			_, err := h.Write([]byte(key))
+	mapToInsert.Range(func(key, value any) bool {
+		if m.config.Hasher != nil {
+			h := m.config.Hasher()
+			_, err := h.Write([]byte(key.(string)))
 			if err != nil {
-				m.ChnErr <- err
+				m.err <- err
 			} else {
-				batch.Queue(m.config.InsertSQL, h.Sum32(), item)
+				batch.Queue(m.config.InsertSQL, h.Sum32(), value.(*atomic.Uint64).Load())
 			}
 		} else {
-			batch.Queue(m.config.InsertSQL, key, item)
+			batch.Queue(m.config.InsertSQL, key, value.(*atomic.Uint64).Load())
 		}
-		if batch.Len() >= 1_000 {
+
+		if batch.Len() >= m.config.BatchInsertSize {
 			m.bulkFunc(batch)
 			batch = &pgx.Batch{}
 		}
-	}
+
+		return true
+	})
+
 	if batch.Len() > 0 {
 		m.bulkFunc(batch)
 	}
@@ -41,18 +43,16 @@ func (m *Mtsdb) insert(container map[string]int) {
 // bulk insert
 func (m *Mtsdb) bulk(batch *pgx.Batch) {
 	tm := time.Now().UnixMilli()
-	m.wg.Add(1)
-	defer m.wg.Done()
-	br := m.pool.SendBatch(m.ctx, batch)
-	//execute statements in batch queue
+	br := m.pool.SendBatch(context.Background(), batch)
+	defer func(br pgx.BatchResults) {
+		err := br.Close()
+		if err != nil {
+			m.err <- err
+		}
+	}(br)
 	_, err := br.Exec()
 	if err != nil {
-		m.ChnErr <- err
-		return
-	}
-	err = br.Close()
-	if err != nil {
-		m.ChnErr <- err
+		m.err <- err
 		return
 	}
 	m.MetricInserts.Add(uint64(batch.Len()))

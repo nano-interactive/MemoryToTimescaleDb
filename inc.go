@@ -1,17 +1,27 @@
 package mtsdb
 
+import (
+	"sync/atomic"
+)
+
 func (m *Mtsdb) Inc(url string) {
 	if url == "" {
 		return
 	}
-	m.mu.Lock()
-	if _, ok := m.container[url]; ok == false {
-		m.container[url] = 0
+
+	if m.ctx.Err() != nil { // no more inserts
+		return
 	}
-	isBulkInsert := m.config.Size != 0 && len(m.container) >= m.config.Size
-	m.container[url]++
-	m.mu.Unlock()
-	if isBulkInsert {
-		go m.bulkInsert()
+
+	value, loaded := m.container.Load().LoadOrStore(url, &atomic.Uint64{})
+	if !loaded {
+		m.containerLen.Add(1)
 	}
+
+	if m.config.Size != 0 && m.containerLen.CompareAndSwap(m.config.Size, 0) {
+		old := m.reset(false)
+		m.job <- old
+	}
+
+	value.(*atomic.Uint64).Add(1)
 }

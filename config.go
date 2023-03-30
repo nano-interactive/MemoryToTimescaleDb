@@ -1,10 +1,20 @@
 package mtsdb
 
-import "time"
+import (
+	"hash"
+	"time"
+)
+
+type Hasher interface {
+	hash.Hash32
+	hash.Hash
+}
 
 type Config struct {
-	Size           int
-	InsertSQL      string
-	InsertDuration time.Duration
-	UseFnvHash     bool
+	Size            uint64
+	InsertSQL       string
+	InsertDuration  time.Duration
+	Hasher          func() Hasher
+	WorkerPoolSize  int
+	BatchInsertSize int // timescale batch insert length
 }
