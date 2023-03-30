@@ -19,7 +19,10 @@ func (m *Mtsdb) insert(mapToInsert *sync.Map) {
 			h := m.config.Hasher()
 			_, err := h.Write([]byte(key.(string)))
 			if err != nil {
-				m.err <- err
+				select { // non-blocking channel send
+				case m.err <- err:
+				default:
+				}
 			} else {
 				batch.Queue(m.config.InsertSQL, h.Sum32(), value.(*atomic.Uint64).Load())
 			}
