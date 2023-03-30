@@ -47,12 +47,19 @@ func (m *Mtsdb) bulk(batch *pgx.Batch) {
 	defer func(br pgx.BatchResults) {
 		err := br.Close()
 		if err != nil {
-			m.err <- err
+			select { // non-blocking channel send
+			case m.err <- err:
+			default:
+			}
+
 		}
 	}(br)
 	_, err := br.Exec()
 	if err != nil {
-		m.err <- err
+		select { // non-blocking channel send
+		case m.err <- err:
+		default:
+		}
 		return
 	}
 	m.MetricInserts.Add(uint64(batch.Len()))

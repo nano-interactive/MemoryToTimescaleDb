@@ -69,7 +69,7 @@ func New(ctx context.Context, pool *pgxpool.Pool, configMtsdb ...Config) *Mtsdb 
 		ctx:              newCtx,
 		cancel:           cancel,
 		container:        atomic.Pointer[sync.Map]{},
-		err:              make(chan error, 0),
+		err:              make(chan error, 100),
 		job:              make(chan *sync.Map, config.WorkerPoolSize),
 		containerLen:     atomic.Uint64{},
 		MetricInserts:    atomic.Uint64{},
