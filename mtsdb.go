@@ -52,10 +52,13 @@ func New(ctx context.Context, pool *pgxpool.Pool, configMtsdb ...Config) *Mtsdb 
 			if config.WorkerPoolSize < 1 {
 				panic("worker pool size has to be > 0")
 			}
-			if config.BatchInsertSize < 1 {
-				panic("batch insert size has to be > 0")
-			}
 		}
+	}
+	if config.BatchInsertSize < 0 {
+		panic("batch insert size has to be > 0")
+	}
+	if config.BatchInsertSize == 0 {
+		config.BatchInsertSize = 1_000
 	}
 
 	newCtx, cancel := context.WithCancel(ctx)
