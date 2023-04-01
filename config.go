@@ -16,5 +16,6 @@ type Config struct {
 	InsertDuration  time.Duration
 	Hasher          func() Hasher
 	WorkerPoolSize  int
-	BatchInsertSize int // timescale batch insert length
+	BatchInsertSize int  // timescale batch insert length
+	skipValidation  bool // internal, for unit tests
 }

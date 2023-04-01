@@ -1,7 +1,7 @@
 package mtsdb
 
-func (m *Mtsdb) worker() {
+func (m *mtsdb) worker() {
 	for job := range m.job {
-		m.insert(job)
+		m.sendBatch(&job)
 	}
 }

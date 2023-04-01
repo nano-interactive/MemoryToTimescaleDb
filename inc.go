@@ -4,7 +4,7 @@ import (
 	"sync/atomic"
 )
 
-func (m *Mtsdb) Inc(url string) {
+func (m *mtsdb) Inc(url string) {
 	if url == "" {
 		return
 	}
@@ -20,7 +20,7 @@ func (m *Mtsdb) Inc(url string) {
 
 	if m.config.Size != 0 && m.containerLen.CompareAndSwap(m.config.Size, 0) {
 		old := m.reset(false)
-		m.job <- old
+		m.insert(old)
 	}
 
 	value.(*atomic.Uint64).Add(1)

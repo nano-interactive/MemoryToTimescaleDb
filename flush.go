@@ -1,5 +1,5 @@
 package mtsdb
 
-func (m *Mtsdb) Flush() {
+func (m *mtsdb) Flush() {
 	m.insert(m.reset(true))
 }

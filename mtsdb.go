@@ -9,9 +9,16 @@ import (
 	"time"
 )
 
-type Mtsdb struct {
+type Mtsdb interface {
+	Errors() <-chan error
+	Inc(url string)
+	Stats() (uint64, uint64)
+	Close() error
+}
+
+type mtsdb struct {
 	err       chan error
-	job       chan *sync.Map
+	job       chan pgx.Batch
 	ctx       context.Context
 	wg        sync.WaitGroup
 	cancel    context.CancelFunc
@@ -20,9 +27,6 @@ type Mtsdb struct {
 
 	config       Config
 	containerLen atomic.Uint64
-
-	// bulk func
-	bulkFunc func(*pgx.Batch)
 
 	// stats
 	MetricInserts    atomic.Uint64
@@ -38,46 +42,40 @@ var DefaultConfig = Config{
 	BatchInsertSize: 1_000,
 }
 
-// New initialize maps and ticks, size has to be > 0
-func New(ctx context.Context, pool *pgxpool.Pool, configMtsdb ...Config) *Mtsdb {
+func New(ctx context.Context, pool *pgxpool.Pool, configMtsdb ...Config) (Mtsdb, error) {
+	return newMtsdb(ctx, pool, configMtsdb...)
+}
+
+func newMtsdb(ctx context.Context, pool *pgxpool.Pool, configMtsdb ...Config) (*mtsdb, error) {
 	config := DefaultConfig
 
 	if len(configMtsdb) > 0 {
 		config = configMtsdb[0]
+	}
+	err := validate(pool, config)
+	if err != nil {
+		return nil, err
+	}
 
-		if config.InsertSQL == "" {
-			panic("insert sql is empty")
-		}
-		if config.Size > 0 {
-			if config.WorkerPoolSize < 1 {
-				panic("worker pool size has to be > 0")
-			}
-		}
-	}
-	if config.BatchInsertSize < 0 {
-		panic("batch insert size has to be > 0")
-	}
 	if config.BatchInsertSize == 0 {
 		config.BatchInsertSize = 1_000
 	}
 
 	newCtx, cancel := context.WithCancel(ctx)
 
-	m := &Mtsdb{
+	m := &mtsdb{
 		pool:             pool,
 		config:           config,
 		ctx:              newCtx,
 		cancel:           cancel,
 		container:        atomic.Pointer[sync.Map]{},
 		err:              make(chan error, 100),
-		job:              make(chan *sync.Map, config.WorkerPoolSize),
+		job:              make(chan pgx.Batch, config.WorkerPoolSize),
 		containerLen:     atomic.Uint64{},
 		MetricInserts:    atomic.Uint64{},
 		MetricDurationMs: atomic.Uint64{},
 	}
 	m.container.Store(&sync.Map{})
-
-	m.bulkFunc = m.bulk
 
 	// initialize worker pool
 	for i := 0; i < config.WorkerPoolSize; i++ {
@@ -88,14 +86,14 @@ func New(ctx context.Context, pool *pgxpool.Pool, configMtsdb ...Config) *Mtsdb 
 		go m.startTicker(newCtx, config.InsertDuration)
 	}
 
-	return m
+	return m, nil
 }
 
-func (m *Mtsdb) Errors() <-chan error {
+func (m *mtsdb) Errors() <-chan error {
 	return m.err
 }
 
-func (m *Mtsdb) startTicker(ctx context.Context, interval time.Duration) {
+func (m *mtsdb) startTicker(ctx context.Context, interval time.Duration) {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 	for {

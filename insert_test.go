@@ -2,7 +2,6 @@ package mtsdb
 
 import (
 	"context"
-	"github.com/jackc/pgx/v5"
 	"github.com/stretchr/testify/require"
 	"hash/fnv"
 	"sync"
@@ -11,19 +10,25 @@ import (
 )
 
 func TestInsert(t *testing.T) {
-	var testCntBulkLen int
+	testCntBulkLen := atomic.Uint64{}
 	assert := require.New(t)
 
 	tstConfig := Config{
 		Size:            3,
 		InsertSQL:       "test",
-		WorkerPoolSize:  5,
+		WorkerPoolSize:  0,
 		BatchInsertSize: 1000,
+		skipValidation:  true,
 	}
-	m := New(context.Background(), nil, tstConfig)
-	m.bulkFunc = func(batch *pgx.Batch) {
-		testCntBulkLen += batch.Len()
-	}
+	m, err := newMtsdb(context.Background(), nil, tstConfig)
+	assert.NoError(err)
+
+	go func() {
+		for job := range m.job {
+			testCntBulkLen.Add(uint64(job.Len()))
+			m.wg.Done()
+		}
+	}()
 
 	param := sync.Map{}
 	one := &atomic.Uint64{}
@@ -33,14 +38,15 @@ func TestInsert(t *testing.T) {
 	param.Store("three", one)
 	param.Store("four", one)
 	m.insert(&param)
+	m.wg.Wait()
 
-	assert.Equal(4, testCntBulkLen)
+	assert.Equal(uint64(4), testCntBulkLen.Load())
 
 }
 
 func TestFnvInsert(t *testing.T) {
 	assert := require.New(t)
-	var testCntBulkLen int
+	testCntBulkLen := atomic.Uint64{}
 	f := func() Hasher {
 		return fnv.New32a()
 	}
@@ -48,13 +54,19 @@ func TestFnvInsert(t *testing.T) {
 		Size:            3,
 		InsertSQL:       "test",
 		Hasher:          f,
-		WorkerPoolSize:  5,
+		WorkerPoolSize:  0,
 		BatchInsertSize: 1000,
+		skipValidation:  true,
 	}
-	m := New(context.Background(), nil, tstConfig)
-	m.bulkFunc = func(batch *pgx.Batch) {
-		testCntBulkLen += batch.Len()
-	}
+	m, err := newMtsdb(context.Background(), nil, tstConfig)
+	assert.NoError(err)
+
+	go func() {
+		for job := range m.job {
+			testCntBulkLen.Add(uint64(job.Len()))
+			m.wg.Done()
+		}
+	}()
 
 	param := sync.Map{}
 	one := &atomic.Uint64{}
@@ -64,7 +76,8 @@ func TestFnvInsert(t *testing.T) {
 	param.Store("three", one)
 	param.Store("four", one)
 	m.insert(&param)
+	m.wg.Wait()
 
-	assert.Equal(4, testCntBulkLen)
+	assert.Equal(uint64(4), testCntBulkLen.Load())
 
 }

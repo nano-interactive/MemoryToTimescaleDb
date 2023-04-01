@@ -9,9 +9,10 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-func (m *Mtsdb) insert(mapToInsert *sync.Map) {
-	m.wg.Add(1)
+func (m *mtsdb) insert(mapToInsert *sync.Map) {
 	defer m.wg.Done()
+	m.wg.Add(1)
+
 	batch := new(pgx.Batch)
 
 	mapToInsert.Range(func(key, value any) bool {
@@ -31,7 +32,8 @@ func (m *Mtsdb) insert(mapToInsert *sync.Map) {
 		}
 
 		if batch.Len() >= m.config.BatchInsertSize {
-			m.bulkFunc(batch)
+			m.wg.Add(1) // m.wg.Done() is on sendBatch
+			m.job <- *batch
 			batch = &pgx.Batch{}
 		}
 
@@ -39,12 +41,15 @@ func (m *Mtsdb) insert(mapToInsert *sync.Map) {
 	})
 
 	if batch.Len() > 0 {
-		m.bulkFunc(batch)
+		m.wg.Add(1) // m.wg.Done() is on sendBatch
+		m.job <- *batch
 	}
 }
 
 // bulk insert
-func (m *Mtsdb) bulk(batch *pgx.Batch) {
+func (m *mtsdb) sendBatch(batch *pgx.Batch) {
+	defer m.wg.Done()
+
 	tm := time.Now().UnixMilli()
 	br := m.pool.SendBatch(context.Background(), batch)
 	defer func(br pgx.BatchResults) {

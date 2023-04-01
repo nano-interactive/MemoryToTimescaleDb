@@ -2,7 +2,6 @@ package mtsdb
 
 import (
 	"context"
-	"github.com/jackc/pgx/v5"
 	"github.com/stretchr/testify/require"
 	"sync/atomic"
 	"testing"
@@ -16,13 +15,19 @@ func TestReset(t *testing.T) {
 	tstConfig := Config{
 		Size:            5,
 		InsertSQL:       "test",
-		WorkerPoolSize:  5,
+		WorkerPoolSize:  0,
 		BatchInsertSize: 1000,
+		skipValidation:  true,
 	}
-	m := New(context.Background(), nil, tstConfig)
-	m.bulkFunc = func(batch *pgx.Batch) {
-		insertInc.Add(uint64(batch.Len()))
-	}
+	m, err := newMtsdb(context.Background(), nil, tstConfig)
+	assert.NoError(err)
+
+	go func() {
+		for job := range m.job {
+			insertInc.Add(uint64(job.Len()))
+			m.wg.Done()
+		}
+	}()
 
 	m.Inc("one")
 	m.Inc("two")

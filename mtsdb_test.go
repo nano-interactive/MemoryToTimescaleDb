@@ -3,7 +3,7 @@ package mtsdb
 import (
 	"context"
 	"github.com/brianvoe/gofakeit/v6"
-	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/require"
 	"hash/fnv"
 	"math/rand"
@@ -14,6 +14,13 @@ import (
 
 func TestNew(t *testing.T) {
 	assert := require.New(t)
+	m, err := New(context.Background(), &pgxpool.Pool{})
+	assert.NoError(err)
+	assert.IsType(&mtsdb{}, m)
+}
+
+func TestNewMtsdb(t *testing.T) {
+	assert := require.New(t)
 
 	insertInc := atomic.Uint64{}
 
@@ -21,13 +28,19 @@ func TestNew(t *testing.T) {
 		Size:            5,
 		InsertSQL:       "test",
 		InsertDuration:  0,
-		WorkerPoolSize:  5,
+		WorkerPoolSize:  0,
 		BatchInsertSize: 1000,
+		skipValidation:  true,
 	}
-	m := New(context.Background(), nil, tstConfig)
-	m.bulkFunc = func(batch *pgx.Batch) {
-		insertInc.Add(uint64(batch.Len()))
-	}
+	m, err := newMtsdb(context.Background(), nil, tstConfig)
+	assert.NoError(err)
+
+	go func() {
+		for job := range m.job {
+			insertInc.Add(uint64(job.Len()))
+			m.wg.Done()
+		}
+	}()
 
 	m.Inc("one")
 	m.Inc("two")
@@ -66,11 +79,18 @@ func TestTick(t *testing.T) {
 		Size:           0,
 		InsertSQL:      "test",
 		InsertDuration: 100 * time.Millisecond,
+		WorkerPoolSize: 0,
+		skipValidation: true,
 	}
-	m := New(context.Background(), nil, tstConfig)
-	m.bulkFunc = func(batch *pgx.Batch) {
-		insertInc.Add(uint64(batch.Len()))
-	}
+	m, err := newMtsdb(context.Background(), nil, tstConfig)
+	assert.NoError(err)
+
+	go func() {
+		for job := range m.job {
+			insertInc.Add(uint64(job.Len()))
+			m.wg.Done()
+		}
+	}()
 
 	m.Inc("one")
 	m.Inc("two")
@@ -102,19 +122,22 @@ func TestTick(t *testing.T) {
 func TestInitConfig(t *testing.T) {
 	assert := require.New(t)
 
-	m := New(context.Background(), nil)
+	m, err := newMtsdb(context.Background(), &pgxpool.Pool{})
+	assert.NoError(err)
 	assert.Equal(uint64(0), m.config.Size)
 	assert.Equal(5, m.config.WorkerPoolSize)
 	assert.Equal(1_000, m.config.BatchInsertSize)
 	_ = m.Close()
 
-	m2 := New(context.Background(), nil, Config{
+	m2, err := newMtsdb(context.Background(), nil, Config{
 		Size:            100_000,
 		InsertSQL:       "test",
 		InsertDuration:  2 * time.Minute,
 		WorkerPoolSize:  3,
 		BatchInsertSize: 2_000,
+		skipValidation:  true,
 	})
+	assert.NoError(err)
 	assert.Equal(uint64(100_000), m2.config.Size)
 	assert.Equal(2*time.Minute, m2.config.InsertDuration)
 	assert.Equal(3, m2.config.WorkerPoolSize)
@@ -123,16 +146,43 @@ func TestInitConfig(t *testing.T) {
 
 }
 
-func TestPanic(t *testing.T) {
+func TestErrors(t *testing.T) {
 	assert := require.New(t)
-	cfg := Config{
-		Size:      0,
-		InsertSQL: "",
+	properCfg := Config{
+		Size:            10_000,
+		InsertSQL:       "test",
+		WorkerPoolSize:  5,
+		BatchInsertSize: 1_000,
 	}
 
-	assert.Panics(func() {
-		New(context.Background(), nil, cfg)
-	})
+	// nil pgxpool
+	_, err := newMtsdb(context.Background(), nil, properCfg)
+	assert.Error(err)
+
+	// size 0 and insertDuration 0
+	cfg := properCfg
+	cfg.Size = 0
+	cfg.InsertDuration = 0
+	_, err = newMtsdb(context.Background(), &pgxpool.Pool{}, cfg)
+	assert.Error(err)
+
+	// empty SQL
+	cfg = properCfg
+	cfg.InsertSQL = ""
+	_, err = newMtsdb(context.Background(), &pgxpool.Pool{}, cfg)
+	assert.Error(err)
+
+	// batch insert size < 0
+	cfg = properCfg
+	cfg.BatchInsertSize = -1
+	_, err = newMtsdb(context.Background(), &pgxpool.Pool{}, cfg)
+	assert.Error(err)
+
+	// worker pool size 0 with size > 0
+	cfg = properCfg
+	cfg.WorkerPoolSize = -1
+	_, err = newMtsdb(context.Background(), &pgxpool.Pool{}, cfg)
+	assert.Error(err)
 
 }
 
@@ -148,12 +198,21 @@ func BenchmarkAdd(b *testing.B) {
 	tstConfig := Config{
 		Size:            10_000,
 		InsertSQL:       "test",
-		WorkerPoolSize:  5,
+		WorkerPoolSize:  0,
 		BatchInsertSize: 1000,
+		skipValidation:  true,
 	}
 
-	m := New(context.Background(), nil, tstConfig)
-	m.bulkFunc = func(*pgx.Batch) {}
+	m, err := newMtsdb(context.Background(), nil, tstConfig)
+	if err != nil {
+		b.Error(err)
+	}
+
+	go func() {
+		for range m.job {
+			m.wg.Done()
+		}
+	}()
 
 	rnd := rand.New(rand.NewSource(100))
 
@@ -181,12 +240,20 @@ func BenchmarkFnvAdd(b *testing.B) {
 		Size:            10_000,
 		InsertSQL:       "test",
 		Hasher:          f,
-		WorkerPoolSize:  5,
+		WorkerPoolSize:  0,
 		BatchInsertSize: 1000,
+		skipValidation:  true,
 	}
 
-	m := New(context.Background(), nil, tstConfig)
-	m.bulkFunc = func(*pgx.Batch) {}
+	m, err := newMtsdb(context.Background(), nil, tstConfig)
+	if err != nil {
+		b.Error(err)
+	}
+	go func() {
+		for range m.job {
+			m.wg.Done()
+		}
+	}()
 
 	rnd := rand.New(rand.NewSource(100))
 

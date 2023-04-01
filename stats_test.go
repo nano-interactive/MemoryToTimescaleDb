@@ -2,10 +2,8 @@ package mtsdb
 
 import (
 	"context"
-	"github.com/jackc/pgx/v5"
 	"github.com/stretchr/testify/require"
 	"testing"
-	"time"
 )
 
 func TestStats(t *testing.T) {
@@ -14,14 +12,19 @@ func TestStats(t *testing.T) {
 	tstConfig := Config{
 		Size:            5,
 		InsertSQL:       "test",
-		WorkerPoolSize:  5,
+		WorkerPoolSize:  0,
 		BatchInsertSize: 1000,
+		skipValidation:  true,
 	}
-	m := New(context.Background(), nil, tstConfig)
-	m.bulkFunc = func(batch *pgx.Batch) {
-		m.MetricInserts.Add(uint64(batch.Len()))
-		m.MetricDurationMs.Add(uint64(100_000))
-	}
+	m, err := newMtsdb(context.Background(), nil, tstConfig)
+	assert.NoError(err)
+	go func() {
+		for job := range m.job {
+			m.MetricInserts.Add(uint64(job.Len()))
+			m.MetricDurationMs.Add(uint64(100_000))
+			m.wg.Done()
+		}
+	}()
 
 	m.Inc("one")
 	m.Inc("two")
@@ -31,11 +34,31 @@ func TestStats(t *testing.T) {
 	m.Inc("four")
 	m.Inc("five")
 
-	time.Sleep(2 * time.Millisecond)
+	m.wg.Wait()
 	inserts, dur := m.Stats()
 
 	assert.Equal(uint64(5), inserts)
 	assert.Equal(uint64(100_000), dur)
 
 	_ = m.Close()
+}
+
+func TestStatsReset(t *testing.T) {
+	assert := require.New(t)
+
+	tstConfig := Config{
+		skipValidation: true,
+	}
+	m, err := newMtsdb(context.Background(), nil, tstConfig)
+	assert.NoError(err)
+
+	m.MetricDurationMs.Store(1e15 + 1)
+	m.MetricInserts.Store(218)
+	ins, dur := m.Stats()
+	ins, dur = m.Stats()
+	assert.Equal(uint64(0), ins)
+	assert.Equal(uint64(0), dur)
+
+	err = m.Close()
+	assert.NoError(err)
 }
