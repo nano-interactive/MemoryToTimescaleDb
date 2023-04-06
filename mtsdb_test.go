@@ -214,12 +214,14 @@ func BenchmarkAdd(b *testing.B) {
 		}
 	}()
 
-	rnd := rand.New(rand.NewSource(100))
+	//rnd := rand.New(rand.NewSource(100))
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		m.Inc(urls[rnd.Intn(10_000)])
-	}
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			m.Inc(urls[rand.Intn(1000)])
+		}
+	})
 
 	_ = m.Close()
 }
@@ -255,12 +257,12 @@ func BenchmarkFnvAdd(b *testing.B) {
 		}
 	}()
 
-	rnd := rand.New(rand.NewSource(100))
-
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		m.Inc(urls[rnd.Intn(10_000)])
-	}
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			m.Inc(urls[rand.Intn(1000)])
+		}
+	})
 
 	_ = m.Close()
 }
