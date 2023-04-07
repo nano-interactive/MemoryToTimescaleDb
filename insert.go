@@ -11,7 +11,7 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-func (m *mtsdb) insert(counterVec prometheus.CounterVec) {
+func (m *mtsdb) insert(counterVec *prometheus.CounterVec) {
 	defer m.wg.Done()
 	m.wg.Add(1)
 

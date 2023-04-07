@@ -19,6 +19,9 @@ func (m *mtsdb) fetchMetricValue(labels ...string) (float64, error) {
 		return 0, err
 	}
 
+	if len(mf) == 0 {
+		return 0, MetricNotFound
+	}
 	for _, metric := range mf[0].GetMetric() {
 		counter := 0
 		for i, label := range labels {

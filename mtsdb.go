@@ -25,6 +25,7 @@ type mtsdb struct {
 	cancel    context.CancelFunc
 	pool      *pgxpool.Pool
 	container atomic.Pointer[prometheus.CounterVec]
+	labels    []string
 
 	config Config
 
@@ -65,6 +66,7 @@ func newMtsdb(ctx context.Context, pool *pgxpool.Pool, config Config, labels ...
 		job:              make(chan pgx.Batch, config.WorkerPoolSize),
 		MetricInserts:    atomic.Uint64{},
 		MetricDurationMs: atomic.Uint64{},
+		labels:           labels,
 	}
 	counterVec := prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "mtsdb",
@@ -76,9 +78,7 @@ func newMtsdb(ctx context.Context, pool *pgxpool.Pool, config Config, labels ...
 		go m.worker()
 	}
 
-	if config.InsertDuration > 0 {
-		go m.startTicker(newCtx, config.InsertDuration)
-	}
+	go m.startTicker(newCtx, config.InsertDuration)
 
 	return m, nil
 }
