@@ -4,6 +4,7 @@ import (
 	"context"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/prometheus/client_golang/prometheus"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -11,7 +12,7 @@ import (
 
 type Mtsdb interface {
 	Errors() <-chan error
-	Inc(url string)
+	Inc(labels ...string)
 	Stats() (uint64, uint64)
 	Close() error
 }
@@ -23,42 +24,33 @@ type mtsdb struct {
 	wg        sync.WaitGroup
 	cancel    context.CancelFunc
 	pool      *pgxpool.Pool
-	container atomic.Pointer[sync.Map]
+	container atomic.Pointer[prometheus.CounterVec]
 
-	config       Config
-	containerLen atomic.Uint64
+	config Config
 
 	// stats
 	MetricInserts    atomic.Uint64
 	MetricDurationMs atomic.Uint64
 }
 
-var DefaultConfig = Config{
-	Size:            0,
-	Hasher:          nil,
-	InsertDuration:  1 * time.Minute,
-	InsertSQL:       "INSERT" + " INTO url_list (time,url,cnt) VALUES (now(),$1,$2)",
-	WorkerPoolSize:  5,
-	BatchInsertSize: 1_000,
+func New(ctx context.Context, pool *pgxpool.Pool, configMtsdb Config, labels ...string) (Mtsdb, error) {
+	return newMtsdb(ctx, pool, configMtsdb, labels...)
 }
 
-func New(ctx context.Context, pool *pgxpool.Pool, configMtsdb ...Config) (Mtsdb, error) {
-	return newMtsdb(ctx, pool, configMtsdb...)
-}
-
-func newMtsdb(ctx context.Context, pool *pgxpool.Pool, configMtsdb ...Config) (*mtsdb, error) {
-	config := DefaultConfig
-
-	if len(configMtsdb) > 0 {
-		config = configMtsdb[0]
+func CreateDefaultConfig() Config {
+	return Config{
+		InsertDuration:  1 * time.Minute,
+		TableName:       "url_prom_list",
+		WorkerPoolSize:  5,
+		BatchInsertSize: 1_000,
 	}
+}
+
+func newMtsdb(ctx context.Context, pool *pgxpool.Pool, config Config, labels ...string) (*mtsdb, error) {
+
 	err := validate(pool, config)
 	if err != nil {
 		return nil, err
-	}
-
-	if config.BatchInsertSize == 0 {
-		config.BatchInsertSize = 1_000
 	}
 
 	newCtx, cancel := context.WithCancel(ctx)
@@ -68,14 +60,16 @@ func newMtsdb(ctx context.Context, pool *pgxpool.Pool, configMtsdb ...Config) (*
 		config:           config,
 		ctx:              newCtx,
 		cancel:           cancel,
-		container:        atomic.Pointer[sync.Map]{},
+		container:        atomic.Pointer[prometheus.CounterVec]{},
 		err:              make(chan error, 100),
 		job:              make(chan pgx.Batch, config.WorkerPoolSize),
-		containerLen:     atomic.Uint64{},
 		MetricInserts:    atomic.Uint64{},
 		MetricDurationMs: atomic.Uint64{},
 	}
-	m.container.Store(&sync.Map{})
+	counterVec := prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "mtsdb",
+	}, labels)
+	m.container.Store(counterVec)
 
 	// initialize worker pool
 	for i := 0; i < config.WorkerPoolSize; i++ {
@@ -99,7 +93,7 @@ func (m *mtsdb) startTicker(ctx context.Context, interval time.Duration) {
 	for {
 		select {
 		case <-ticker.C:
-			m.insert(m.reset(true))
+			m.insert(m.reset())
 		case <-ctx.Done():
 			return
 		}

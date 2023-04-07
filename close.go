@@ -2,7 +2,7 @@ package mtsdb
 
 func (m *mtsdb) Close() error {
 	m.cancel() // Stop the workers
-	m.insert(m.reset(true))
+	m.insert(m.reset())
 	// wait for postgres batch to finish
 	m.wg.Wait()
 	close(m.err)

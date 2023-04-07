@@ -1,11 +1,7 @@
 package mtsdb
 
-import (
-	"sync/atomic"
-)
-
-func (m *mtsdb) Inc(url string) {
-	if url == "" {
+func (m *mtsdb) Inc(labels ...string) {
+	if len(labels) == 0 {
 		return
 	}
 
@@ -13,15 +9,6 @@ func (m *mtsdb) Inc(url string) {
 		return
 	}
 
-	value, loaded := m.container.Load().LoadOrStore(url, &atomic.Uint64{})
-	if !loaded {
-		m.containerLen.Add(1)
-	}
+	m.container.Load().WithLabelValues(labels...).Inc()
 
-	if m.config.Size != 0 && m.containerLen.CompareAndSwap(m.config.Size, 0) {
-		old := m.reset(false)
-		m.insert(old)
-	}
-
-	value.(*atomic.Uint64).Add(1)
 }
