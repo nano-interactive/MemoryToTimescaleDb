@@ -62,5 +62,8 @@ func (m *mtsdb) generateSql(mf *io_prometheus_client.MetricFamily) string {
 		}
 		break
 	}
+	labels = append(labels, "cnt")
+	values = append(values, fmt.Sprintf("$%d", len(values)+1))
+
 	return fmt.Sprintf(sql, m.config.TableName, strings.Join(labels, ","), strings.Join(values, ","))
 }

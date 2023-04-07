@@ -20,14 +20,14 @@ func TestGenerateSql(t *testing.T) {
 	metrics := []testData{
 		{
 			labels: []string{"one"},
-			result: "INSERT" + " INTO test (one) VALUES ($1)",
+			result: "INSERT" + " INTO test (one,cnt) VALUES ($1,$2)",
 		},
 		{
 			labels: []string{"one", "two"},
-			result: "INSERT" + " INTO test (one,two) VALUES ($1,$2)",
+			result: "INSERT" + " INTO test (one,two,cnt) VALUES ($1,$2,$3)",
 		}, {
 			labels: []string{"one", "two", "three", "four", "five"},
-			result: "INSERT" + " INTO test (one,two,three,four,five) VALUES ($1,$2,$3,$4,$5)",
+			result: "INSERT" + " INTO test (one,two,three,four,five,cnt) VALUES ($1,$2,$3,$4,$5,$6)",
 		},
 	}
 
