@@ -11,7 +11,7 @@ import (
 func TestStats(t *testing.T) {
 	assert := require.New(t)
 
-	m, err := newMtsdb(context.Background(), &pgxpool.Pool{}, CreateDefaultConfig())
+	m, err := newMtsdb(context.Background(), &pgxpool.Pool{}, DefaultConfig())
 	assert.NoError(err)
 
 	m.MetricInserts.Add(uint64(5))

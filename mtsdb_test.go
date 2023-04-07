@@ -13,7 +13,7 @@ import (
 
 func TestNew(t *testing.T) {
 	assert := require.New(t)
-	m, err := New(context.Background(), &pgxpool.Pool{}, CreateDefaultConfig())
+	m, err := New(context.Background(), &pgxpool.Pool{}, DefaultConfig())
 	assert.NoError(err)
 	assert.IsType(&mtsdb{}, m)
 }
@@ -64,6 +64,67 @@ func TestNewMtsdb(t *testing.T) {
 	assert.Equal(float64(6), checkSix)
 
 	_ = m.Close()
+}
+
+func TestMultipleLabels(t *testing.T) {
+	assert := require.New(t)
+
+	type testDataValue struct {
+		labelValue    []string
+		incCallsCount int
+	}
+	type testData struct {
+		labels []string
+		values []testDataValue
+	}
+	metrics := []testData{
+		{
+			labels: []string{"one", "two"},
+			values: []testDataValue{
+				{
+					labelValue:    []string{"first", "second"},
+					incCallsCount: 3,
+				},
+				{
+					labelValue:    []string{"prvi", "drugi"},
+					incCallsCount: 1,
+				},
+			},
+		},
+		{
+			labels: []string{"one", "two", "three"},
+			values: []testDataValue{
+				{
+					labelValue:    []string{"first", "second", "third"},
+					incCallsCount: 3,
+				},
+				{
+					labelValue:    []string{"prvi", "drugi", "treci"},
+					incCallsCount: 1,
+				},
+			},
+		},
+	}
+
+	for _, metric := range metrics {
+		tstConfig := DefaultConfig()
+		tstConfig.InsertDuration = 10 * time.Minute
+		m, err := newMtsdb(context.Background(), &pgxpool.Pool{}, tstConfig, metric.labels...)
+		assert.NoError(err)
+		for _, value := range metric.values {
+			for i := 0; i < value.incCallsCount; i++ {
+				m.Inc(value.labelValue...)
+			}
+		}
+
+		for _, value := range metric.values {
+			findMetric, err := m.fetchMetricValue(value.labelValue...)
+			assert.NoError(err)
+			assert.Equal(float64(value.incCallsCount), findMetric)
+		}
+
+	}
+
 }
 
 func TestTick(t *testing.T) {
@@ -120,7 +181,7 @@ func TestTick(t *testing.T) {
 func TestInitConfig(t *testing.T) {
 	assert := require.New(t)
 
-	m, err := newMtsdb(context.Background(), &pgxpool.Pool{}, CreateDefaultConfig())
+	m, err := newMtsdb(context.Background(), &pgxpool.Pool{}, DefaultConfig())
 	assert.NoError(err)
 	assert.Equal(5, m.config.WorkerPoolSize)
 	assert.Equal(1_000, m.config.BatchInsertSize)
@@ -142,7 +203,7 @@ func TestInitConfig(t *testing.T) {
 
 func TestErrors(t *testing.T) {
 	assert := require.New(t)
-	properCfg := CreateDefaultConfig()
+	properCfg := DefaultConfig()
 
 	// nil pgxpool
 	_, err := newMtsdb(context.Background(), nil, properCfg)

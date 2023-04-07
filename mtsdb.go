@@ -38,15 +38,6 @@ func New(ctx context.Context, pool *pgxpool.Pool, configMtsdb Config, labels ...
 	return newMtsdb(ctx, pool, configMtsdb, labels...)
 }
 
-func CreateDefaultConfig() Config {
-	return Config{
-		InsertDuration:  1 * time.Minute,
-		TableName:       "url_prom_list",
-		WorkerPoolSize:  5,
-		BatchInsertSize: 1_000,
-	}
-}
-
 func newMtsdb(ctx context.Context, pool *pgxpool.Pool, config Config, labels ...string) (*mtsdb, error) {
 
 	err := validate(pool, config)
