@@ -1,9 +1,11 @@
 # MemoryToTimescaleDb
-`Mtsdb` is in-memory counter that acts like caching layer. It stores `string` as a key in maps and increments by 1 if the key is present.
-After predefined `Size` or `Duration` it bulk-inserts data into timescaledb.
+`Mtsdb` is in-memory counter that uses acts like caching layer. It stores `labels` as string and increments by 1 if the `Inc(labels...)` is called.
+After predefined `InsertDuration` it bulk-inserts data into timescaledb.
+
+We use it to collect metrics of `data request` from our `LIIFTEngine` service.
 
 ## Usage
-Initialize MemoryToTimescaleDb `Mtsdb.New` and call `Inc(string...)` for each incremental request
+Initialize MemoryToTimescaleDb `Mtsdb.New` and call `Inc(labels...)` for each incremental request
 
 Example:
 ```
