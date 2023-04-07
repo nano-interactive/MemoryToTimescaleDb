@@ -34,7 +34,7 @@ func (m *mtsdb) insert(counterVec *prometheus.CounterVec) {
 	sql := m.generateSql(mf[0])
 
 	for _, metric := range mf[0].GetMetric() {
-		values := make([]any, len(metric.GetLabel()))
+		values := make([]any, len(metric.GetLabel())+1)
 		for i, mLabel := range m.labels {
 			for _, label := range metric.GetLabel() {
 				if mLabel == label.GetName() {
@@ -43,6 +43,7 @@ func (m *mtsdb) insert(counterVec *prometheus.CounterVec) {
 				}
 			}
 		}
+		values[len(metric.GetLabel())] = metric.GetCounter().GetValue()
 		batch.Queue(sql, values...)
 
 		if batch.Len() >= m.config.BatchInsertSize {
