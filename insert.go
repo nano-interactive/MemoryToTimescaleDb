@@ -2,48 +2,25 @@ package mtsdb
 
 import (
 	"context"
-	"github.com/prometheus/client_golang/prometheus"
+	"sync"
 	"time"
 
 	"github.com/jackc/pgx/v5"
 )
 
-func (m *mtsdb) insert(counterVec *prometheus.CounterVec) {
+func (m *mtsdb) insert(mapToInsert *sync.Map) {
 	defer m.wg.Done()
 	m.wg.Add(1)
 
-	r := prometheus.NewRegistry()
-	err := r.Register(counterVec)
-	if err != nil {
-		m.raiseError(err)
-		return
-	}
-
-	mf, err := r.Gather()
-	if err != nil {
-		m.raiseError(err)
-		return
-	}
-
-	if len(mf) == 0 {
-		return
-	}
-
 	batch := new(pgx.Batch)
 
-	sql := m.generateSql(mf[0])
-
-	for _, metric := range mf[0].GetMetric() {
-		values := make([]any, len(metric.GetLabel())+1)
-		for i, mLabel := range m.labels {
-			for _, label := range metric.GetLabel() {
-				if mLabel == label.GetName() {
-					values[i] = label.GetValue()
-					break
-				}
-			}
+	sql := m.generateSql()
+	mapToInsert.Range(func(key, value any) bool {
+		values := make([]any, len(m.labels)+1)
+		for i, fieldValue := range value.(*Metric).fields {
+			values[i] = fieldValue
 		}
-		values[len(metric.GetLabel())] = metric.GetCounter().GetValue()
+		values[len(m.labels)] = value.(*Metric).count.Load()
 		batch.Queue(sql, values...)
 
 		if batch.Len() >= m.config.BatchInsertSize {
@@ -51,7 +28,9 @@ func (m *mtsdb) insert(counterVec *prometheus.CounterVec) {
 			m.job <- *batch
 			batch = &pgx.Batch{}
 		}
-	}
+
+		return true
+	})
 
 	if batch.Len() > 0 {
 		m.wg.Add(1) // m.wg.Done() is on sendBatch
@@ -74,14 +53,7 @@ func (m *mtsdb) sendBatch(batch *pgx.Batch) {
 	tm := time.Now().UnixMilli()
 	br := m.pool.SendBatch(context.Background(), batch)
 	defer func(br pgx.BatchResults) {
-		err := br.Close()
-		if err != nil {
-			select { // non-blocking channel send
-			case m.err <- err:
-			default:
-			}
-
-		}
+		_ = br.Close()
 	}(br)
 	_, err := br.Exec()
 	if err != nil {

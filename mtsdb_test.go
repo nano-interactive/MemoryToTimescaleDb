@@ -25,7 +25,8 @@ func TestNewMtsdb(t *testing.T) {
 
 	tstConfig := Config{
 		TableName:       "test",
-		InsertDuration:  10 * time.Millisecond,
+		InsertDuration:  0,
+		Size:            5,
 		WorkerPoolSize:  0,
 		BatchInsertSize: 1000,
 		skipValidation:  true,
@@ -42,26 +43,31 @@ func TestNewMtsdb(t *testing.T) {
 
 	m.Inc("one")
 	m.Inc("two")
-	m.Inc("three")
 	m.Inc("four")
 	m.Inc("three")
-	m.Inc("six")
 	m.Inc("four")
-	m.Inc("six")
-	m.Inc("six")
-	m.Inc("six")
-	m.Inc("three")
-	m.Inc("six")
-	m.Inc("six")
-
-	checkOne, _ := m.fetchMetricValue("one")
+	checkOne, err := m.fetchMetricValue("one")
+	assert.NoError(err)
 	checkFour, _ := m.fetchMetricValue("four")
-	checkSix, _ := m.fetchMetricValue("six")
-
 	assert.Equal(uint64(0), insertInc.Load(), "bulk insert should not be called")
-	assert.Equal(float64(1), checkOne)
-	assert.Equal(float64(2), checkFour)
-	assert.Equal(float64(6), checkSix)
+	assert.Equal(uint32(1), checkOne)
+	assert.Equal(uint32(2), checkFour)
+
+	m.Inc("five")
+	m.Inc("five")
+	m.Inc("six")
+	m.Inc("six")
+	m.Inc("six")
+	m.Inc("three")
+	m.Inc("six")
+	m.Inc("six")
+
+	m.wg.Wait()
+	checkSix, _ := m.fetchMetricValue("six")
+	assert.Equal(uint64(5), insertInc.Load())
+	_, err = m.fetchMetricValue("one")
+	assert.ErrorIs(err, MetricNotFound)
+	assert.Equal(uint32(5), checkSix)
 
 	_ = m.Close()
 }
@@ -120,7 +126,7 @@ func TestMultipleLabels(t *testing.T) {
 		for _, value := range metric.values {
 			findMetric, err := m.fetchMetricValue(value.labelValue...)
 			assert.NoError(err)
-			assert.Equal(float64(value.incCallsCount), findMetric)
+			assert.Equal(uint32(value.incCallsCount), findMetric)
 		}
 
 	}
@@ -148,6 +154,11 @@ func TestTick(t *testing.T) {
 			m.wg.Done()
 		}
 	}()
+	go func() {
+		for err := range m.Errors() {
+			assert.NoError(err)
+		}
+	}()
 
 	m.Inc("one")
 	m.Inc("two")
@@ -160,11 +171,10 @@ func TestTick(t *testing.T) {
 	checkFour, _ := m.fetchMetricValue("four")
 
 	assert.Equal(uint64(0), insertInc.Load(), "bulk insert should not be called")
-	assert.Equal(uint64(0), insertInc.Load(), "bulk insert should not be called")
-	assert.Equal(float64(1), checkOne)
-	assert.Equal(float64(2), checkFour)
+	assert.Equal(uint32(1), checkOne)
+	assert.Equal(uint32(2), checkFour)
 	//
-	time.Sleep(11 * time.Millisecond)
+	time.Sleep(12 * time.Millisecond)
 
 	_, err = m.fetchMetricValue("one")
 	assert.ErrorIs(err, MetricNotFound)
@@ -173,7 +183,7 @@ func TestTick(t *testing.T) {
 	m.Inc("six")
 	m.Inc("six")
 	checkSix, _ := m.fetchMetricValue("six")
-	assert.Equal(float64(2), checkSix)
+	assert.Equal(uint32(2), checkSix)
 
 	_ = m.Close()
 }

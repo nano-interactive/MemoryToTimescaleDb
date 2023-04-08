@@ -22,8 +22,8 @@ func validate(pool *pgxpool.Pool, config Config) error {
 	if config.BatchInsertSize < 1 {
 		return errors.New("batch insert size has to be > 0")
 	}
-	if config.InsertDuration < 1 {
-		return errors.New("insert duration has to be > 0")
+	if config.Size < 1 && config.InsertDuration < 1 {
+		return errors.New("insert duration or size has to be > 0")
 	}
 	return nil
 }

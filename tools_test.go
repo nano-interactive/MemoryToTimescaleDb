@@ -3,7 +3,6 @@ package mtsdb
 import (
 	"context"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/require"
 	"testing"
 	"time"
@@ -38,16 +37,8 @@ func TestGenerateSql(t *testing.T) {
 		m, err := newMtsdb(context.Background(), &pgxpool.Pool{}, tstConfig, metric.labels...)
 		assert.NoError(err)
 		m.Inc(metric.labels...)
-		r := prometheus.NewRegistry()
-		err = r.Register(*m.container.Load())
-		assert.NoError(err)
 
-		mf, err := r.Gather()
-		assert.NoError(err)
-
-		assert.Equal(metric.result, m.generateSql(mf[0]))
-
-		//_ = m.Close()
+		assert.Equal(metric.result, m.generateSql())
 
 	}
 

@@ -47,7 +47,7 @@ func TestFlush(t *testing.T) {
 	m.Inc("one")
 	m.Inc("one")
 	checkOne, _ := m.fetchMetricValue("one")
-	assert.Equal(float64(2), checkOne)
+	assert.Equal(uint32(2), checkOne)
 
 	_, err = m.fetchMetricValue("two")
 	assert.ErrorIs(err, MetricNotFound)

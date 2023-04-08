@@ -1,12 +1,10 @@
 package mtsdb
 
 import (
-	"github.com/prometheus/client_golang/prometheus"
+	"sync"
 )
 
-func (m *mtsdb) reset() *prometheus.CounterVec {
-	counterVec := prometheus.NewCounterVec(prometheus.CounterOpts{
-		Name: "mtsdb",
-	}, m.labels)
-	return m.container.Swap(counterVec)
+func (m *mtsdb) reset() *sync.Map {
+	m.containerLen.Store(0)
+	return m.container.Swap(&sync.Map{})
 }

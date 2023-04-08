@@ -6,6 +6,7 @@ import (
 
 type Config struct {
 	TableName       string
+	Size            uint64
 	InsertDuration  time.Duration
 	WorkerPoolSize  int
 	BatchInsertSize int  // timescale batch insert length
