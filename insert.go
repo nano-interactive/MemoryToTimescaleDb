@@ -2,6 +2,7 @@ package mtsdb
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
@@ -12,6 +13,7 @@ func (m *mtsdb) insert(mapToInsert *sync.Map) {
 	defer m.wg.Done()
 	m.wg.Add(1)
 
+	fmt.Println("insert")
 	batch := new(pgx.Batch)
 
 	sql := m.generateSql()
