@@ -5,13 +5,15 @@ After predefined `InsertDuration` it bulk-inserts data into timescaledb.
 We use it to collect metrics of `data request` from our `LIIFTEngine` service.
 
 ## Usage
-Initialize MemoryToTimescaleDb `Mtsdb.New` and call `Inc(labels...)` for each incremental request
+Initialize MemoryToTimescaleDb `Mtsdb.New` and call `Inc(labels...)` for each incremental request or `IncBy(count,labels...)` for incrementing by `count` value.
 
 Example:
 ```
 m:= mtsdb.New(context.Context, *pgxpool.Pool, mtsdb.DefaultConfig(), "url","country")
 	
 m.Inc("https://example.com/hello","RS")
+// or 
+m.IncBy(10,"https://example.com/hello","RS")
 ```
 
 Config params
