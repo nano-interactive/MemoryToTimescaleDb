@@ -1,10 +1,12 @@
 package mtsdb
 
-import (
-	"sync/atomic"
-)
+import "sync/atomic"
 
 func (m *mtsdb) Inc(labels ...string) {
+	m.IncBy(1, labels...)
+}
+
+func (m *mtsdb) IncBy(count uint32, labels ...string) {
 	if len(labels) == 0 {
 		return
 	}
@@ -14,7 +16,7 @@ func (m *mtsdb) Inc(labels ...string) {
 	}
 	metric := Metric{
 		fields: labels,
-		count:  &atomic.Uint32{},
+		count:  atomic.Uint32{},
 	}
 
 	hashResult, err := m.generateHash(labels...)
@@ -35,6 +37,5 @@ func (m *mtsdb) Inc(labels ...string) {
 		m.insert(m.reset())
 	}
 
-	value.(*Metric).count.Add(1)
-
+	value.(*Metric).count.Add(count)
 }

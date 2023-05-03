@@ -19,5 +19,6 @@ func DefaultConfig() Config {
 		TableName:       "url_prom_list",
 		WorkerPoolSize:  5,
 		BatchInsertSize: 1_000,
+		Size:            0,
 	}
 }

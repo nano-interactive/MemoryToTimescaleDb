@@ -72,6 +72,47 @@ func TestNewMtsdb(t *testing.T) {
 	_ = m.Close()
 }
 
+func TestIncBy(t *testing.T) {
+	assert := require.New(t)
+
+	insertInc := atomic.Uint64{}
+
+	tstConfig := Config{
+		TableName:       "test",
+		InsertDuration:  0,
+		Size:            5,
+		WorkerPoolSize:  0,
+		BatchInsertSize: 1000,
+		skipValidation:  true,
+	}
+	m, err := newMtsdb(context.Background(), nil, tstConfig, "url")
+	assert.NoError(err)
+
+	go func() {
+		for job := range m.job {
+			insertInc.Add(uint64(job.Len()))
+			m.wg.Done()
+		}
+	}()
+
+	m.IncBy(10, "one")
+	m.IncBy(5, "two")
+	m.IncBy(1, "three")
+	m.IncBy(4, "four")
+	checkOne, err := m.fetchMetricValue("one")
+	assert.NoError(err)
+	checkTwo, _ := m.fetchMetricValue("two")
+	checkThree, _ := m.fetchMetricValue("three")
+	checkFour, _ := m.fetchMetricValue("four")
+	assert.Equal(uint64(0), insertInc.Load(), "bulk insert should not be called")
+	assert.Equal(uint32(10), checkOne)
+	assert.Equal(uint32(5), checkTwo)
+	assert.Equal(uint32(1), checkThree)
+	assert.Equal(uint32(4), checkFour)
+
+	_ = m.Close()
+}
+
 func TestMultipleLabels(t *testing.T) {
 	assert := require.New(t)
 
@@ -259,6 +300,7 @@ func BenchmarkAdd(b *testing.B) {
 		BatchInsertSize: 1000,
 		skipValidation:  true,
 		InsertDuration:  5 * time.Minute,
+		Size:            0,
 	}
 
 	m, err := newMtsdb(context.Background(), nil, tstConfig, "url")

@@ -14,6 +14,7 @@ import (
 type Mtsdb interface {
 	Errors() <-chan error
 	Inc(labels ...string)
+	IncBy(count uint32, labels ...string)
 	Stats() (uint64, uint64)
 	Close() error
 }
