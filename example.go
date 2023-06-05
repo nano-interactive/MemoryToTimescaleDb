@@ -1,0 +1,5 @@
+package mtsdb
+
+func simpleExample() {
+
+}

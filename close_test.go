@@ -14,14 +14,19 @@ func TestClose(t *testing.T) {
 	insertInc := atomic.Uint64{}
 
 	tstConfig := Config{
-		TableName:       "test",
 		InsertDuration:  10 * time.Minute,
 		WorkerPoolSize:  0,
 		BatchInsertSize: 1000,
 		skipValidation:  true,
 	}
-	m, err := newMtsdb(context.Background(), nil, tstConfig, "url")
+	ctx := context.Background()
+	m, err := newMtsdb(ctx, nil, tstConfig)
 	assert.NoError(err)
+
+	c, err := NewMetricCounter(ctx, "testCounter", MetricCounterConfig{}, "label1")
+	assert.NoError(err)
+
+	m.MustRegister(c)
 
 	go func() {
 		for job := range m.job {
@@ -30,12 +35,12 @@ func TestClose(t *testing.T) {
 		}
 	}()
 
-	m.Inc("one")
-	m.Inc("two")
-	m.Inc("three")
-	m.Inc("four")
-	m.Inc("three")
-	m.Inc("four")
+	c.Inc("one")
+	c.Inc("two")
+	c.Inc("three")
+	c.Inc("four")
+	c.Inc("three")
+	c.Inc("four")
 
 	assert.Equal(uint64(0), insertInc.Load(), "bulk insert should not be called")
 
@@ -43,8 +48,13 @@ func TestClose(t *testing.T) {
 
 	assert.Equal(uint64(4), insertInc.Load())
 
-	m.Inc("one")
-	_, err = m.fetchMetricValue("one")
-	assert.ErrorIs(err, MetricNotFound)
+	c.Inc("one")
+
+	value, ok := c.Get("one")
+	assert.True(ok)
+	assert.Equal(uint32(1), value)
+
+	_, ok = c.Get("two")
+	assert.False(ok)
 
 }

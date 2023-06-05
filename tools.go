@@ -1,53 +1,30 @@
 package mtsdb
 
 import (
-	"errors"
 	"fmt"
+	"hash/fnv"
 	"strings"
 )
 
-var MetricNotFound = errors.New("metric not found")
-
-func (m *mtsdb) generateHash(labels ...string) (uint32, error) {
-	_, err := m.hash32.Write([]byte(strings.Join(labels, "")))
-	res := m.hash32.Sum32()
-	m.hash32.Reset()
+func hashLabels(labels []string) (uint32, error) {
+	h := fnv.New32a()
+	_, err := h.Write([]byte(strings.Join(labels, "")))
 	if err != nil {
 		return 0, err
 	}
-	return res, nil
+	return h.Sum32(), nil
 }
 
-func (m *mtsdb) fetchMetricValue(labels ...string) (uint32, error) {
-
-	hashResult, err := m.generateHash(labels...)
-	if err != nil {
-		return 0, err
-	}
-
-	value, ok := m.container.Load().Load(hashResult)
-	if !ok {
-		return 0, MetricNotFound
-	}
-	mt := value.(*Metric)
-	return mt.count.Load(), nil
-
-}
-
-func (m *mtsdb) generateSql() string {
+func (m *mtsdb) generateSql(tableName string, labels []string) string {
 	sql := "INSERT" + " INTO %s (%s) VALUES (%s)"
 
-	labels := make([]string, len(m.labels))
-	values := make([]string, len(m.labels))
-	counter := 0
-	for i, mLabel := range m.labels {
-		counter++
-		labels[i] = mLabel
-		values[i] = fmt.Sprintf("$%d", counter)
+	values := make([]string, len(labels))
+	for i := range labels {
+		values[i] = fmt.Sprintf("$%d", i+1)
 	}
 
 	labels = append(labels, "cnt")
-	values = append(values, fmt.Sprintf("$%d", counter+1))
+	values = append(values, fmt.Sprintf("$%d", len(labels)))
 
-	return fmt.Sprintf(sql, m.config.TableName, strings.Join(labels, ","), strings.Join(values, ","))
+	return fmt.Sprintf(sql, tableName, strings.Join(labels, ","), strings.Join(values, ","))
 }

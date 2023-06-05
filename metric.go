@@ -1,8 +1,20 @@
 package mtsdb
 
-import "sync/atomic"
+import (
+	"sync/atomic"
+)
 
-type Metric struct {
+type MetricLabelValues struct {
 	fields []string
 	count  atomic.Uint32
+}
+
+type MetricInterface interface {
+	Desc() string
+	Write() *insertMetric
+}
+
+type Metric struct {
+	name string
+	desc string
 }

@@ -24,170 +24,19 @@ func TestNewMtsdb(t *testing.T) {
 	insertInc := atomic.Uint64{}
 
 	tstConfig := Config{
-		TableName:       "test",
-		InsertDuration:  0,
-		Size:            5,
-		WorkerPoolSize:  0,
-		BatchInsertSize: 1000,
-		skipValidation:  true,
-	}
-	m, err := newMtsdb(context.Background(), nil, tstConfig, "url")
-	assert.NoError(err)
-
-	go func() {
-		for job := range m.job {
-			insertInc.Add(uint64(job.Len()))
-			m.wg.Done()
-		}
-	}()
-
-	m.Inc("one")
-	m.Inc("two")
-	m.Inc("four")
-	m.Inc("three")
-	m.Inc("four")
-	checkOne, err := m.fetchMetricValue("one")
-	assert.NoError(err)
-	checkFour, _ := m.fetchMetricValue("four")
-	assert.Equal(uint64(0), insertInc.Load(), "bulk insert should not be called")
-	assert.Equal(uint32(1), checkOne)
-	assert.Equal(uint32(2), checkFour)
-
-	m.Inc("five")
-	m.Inc("five")
-	m.Inc("six")
-	m.Inc("six")
-	m.Inc("six")
-	m.Inc("three")
-	m.Inc("six")
-	m.Inc("six")
-
-	m.wg.Wait()
-	checkSix, _ := m.fetchMetricValue("six")
-	assert.Equal(uint64(5), insertInc.Load())
-	_, err = m.fetchMetricValue("one")
-	assert.ErrorIs(err, MetricNotFound)
-	assert.Equal(uint32(5), checkSix)
-
-	_ = m.Close()
-}
-
-func TestIncBy(t *testing.T) {
-	assert := require.New(t)
-
-	insertInc := atomic.Uint64{}
-
-	tstConfig := Config{
-		TableName:       "test",
-		InsertDuration:  0,
-		Size:            5,
-		WorkerPoolSize:  0,
-		BatchInsertSize: 1000,
-		skipValidation:  true,
-	}
-	m, err := newMtsdb(context.Background(), nil, tstConfig, "url")
-	assert.NoError(err)
-
-	go func() {
-		for job := range m.job {
-			insertInc.Add(uint64(job.Len()))
-			m.wg.Done()
-		}
-	}()
-
-	m.IncBy(10, "one")
-	m.IncBy(5, "two")
-	m.IncBy(1, "three")
-	m.IncBy(4, "four")
-	checkOne, err := m.fetchMetricValue("one")
-	assert.NoError(err)
-	checkTwo, _ := m.fetchMetricValue("two")
-	checkThree, _ := m.fetchMetricValue("three")
-	checkFour, _ := m.fetchMetricValue("four")
-	assert.Equal(uint64(0), insertInc.Load(), "bulk insert should not be called")
-	assert.Equal(uint32(10), checkOne)
-	assert.Equal(uint32(5), checkTwo)
-	assert.Equal(uint32(1), checkThree)
-	assert.Equal(uint32(4), checkFour)
-
-	_ = m.Close()
-}
-
-func TestMultipleLabels(t *testing.T) {
-	assert := require.New(t)
-
-	type testDataValue struct {
-		labelValue    []string
-		incCallsCount int
-	}
-	type testData struct {
-		labels []string
-		values []testDataValue
-	}
-	metrics := []testData{
-		{
-			labels: []string{"one", "two"},
-			values: []testDataValue{
-				{
-					labelValue:    []string{"first", "second"},
-					incCallsCount: 3,
-				},
-				{
-					labelValue:    []string{"prvi", "drugi"},
-					incCallsCount: 1,
-				},
-			},
-		},
-		{
-			labels: []string{"one", "two", "three"},
-			values: []testDataValue{
-				{
-					labelValue:    []string{"first", "second", "third"},
-					incCallsCount: 3,
-				},
-				{
-					labelValue:    []string{"prvi", "drugi", "treci"},
-					incCallsCount: 1,
-				},
-			},
-		},
-	}
-
-	for _, metric := range metrics {
-		tstConfig := DefaultConfig()
-		tstConfig.InsertDuration = 10 * time.Minute
-		m, err := newMtsdb(context.Background(), &pgxpool.Pool{}, tstConfig, metric.labels...)
-		assert.NoError(err)
-		for _, value := range metric.values {
-			for i := 0; i < value.incCallsCount; i++ {
-				m.Inc(value.labelValue...)
-			}
-		}
-
-		for _, value := range metric.values {
-			findMetric, err := m.fetchMetricValue(value.labelValue...)
-			assert.NoError(err)
-			assert.Equal(uint32(value.incCallsCount), findMetric)
-		}
-
-	}
-
-}
-
-func TestTick(t *testing.T) {
-	assert := require.New(t)
-
-	insertInc := atomic.Uint64{}
-
-	tstConfig := Config{
-		TableName:       "test",
 		InsertDuration:  10 * time.Millisecond,
 		WorkerPoolSize:  0,
-		BatchInsertSize: 1_000,
+		BatchInsertSize: 1000,
 		skipValidation:  true,
 	}
-	m, err := newMtsdb(context.Background(), &pgxpool.Pool{}, tstConfig, "url")
+	ctx := context.Background()
+	m, err := newMtsdb(ctx, nil, tstConfig)
 	assert.NoError(err)
+
+	c, err := NewMetricCounter(ctx, "testCounter", MetricCounterConfig{}, "label1")
+	assert.NoError(err)
+
+	m.MustRegister(c)
 
 	go func() {
 		for job := range m.job {
@@ -195,36 +44,39 @@ func TestTick(t *testing.T) {
 			m.wg.Done()
 		}
 	}()
-	go func() {
-		for err := range m.Errors() {
-			assert.NoError(err)
-		}
-	}()
 
-	m.Inc("one")
-	m.Inc("two")
-	m.Inc("three")
-	m.Inc("four")
-	m.Inc("five")
-	m.Inc("three")
-	m.Inc("four")
-	checkOne, _ := m.fetchMetricValue("one")
-	checkFour, _ := m.fetchMetricValue("four")
-
+	c.Inc("one")
+	c.Inc("two")
+	c.Inc("four")
+	c.Inc("three")
+	c.Inc("four")
+	checkOne, ok := c.Get("one")
+	assert.True(ok)
+	checkFour, _ := c.Get("four")
 	assert.Equal(uint64(0), insertInc.Load(), "bulk insert should not be called")
 	assert.Equal(uint32(1), checkOne)
 	assert.Equal(uint32(2), checkFour)
-	//
-	time.Sleep(12 * time.Millisecond)
 
-	_, err = m.fetchMetricValue("one")
-	assert.ErrorIs(err, MetricNotFound)
-	assert.Equal(uint64(5), insertInc.Load())
+	time.Sleep(12 * time.Millisecond) // wait for insert tick
 
-	m.Inc("six")
-	m.Inc("six")
-	checkSix, _ := m.fetchMetricValue("six")
-	assert.Equal(uint32(2), checkSix)
+	c.Inc("one")
+	c.Inc("one")
+	c.Inc("two")
+	c.Inc("two")
+	c.Inc("two")
+	c.Inc("three")
+	c.Inc("one")
+	c.Inc("one")
+
+	m.wg.Wait()
+
+	assert.Equal(uint64(4), insertInc.Load())
+	checkOne, ok = c.Get("one")
+	assert.True(ok)
+	assert.Equal(uint32(4), checkOne)
+
+	_, ok = c.Get("four")
+	assert.False(ok)
 
 	_ = m.Close()
 }
@@ -239,7 +91,6 @@ func TestInitConfig(t *testing.T) {
 	_ = m.Close()
 
 	m2, err := newMtsdb(context.Background(), &pgxpool.Pool{}, Config{
-		TableName:       "test",
 		InsertDuration:  2 * time.Minute,
 		WorkerPoolSize:  3,
 		BatchInsertSize: 2_000,
@@ -266,12 +117,6 @@ func TestErrors(t *testing.T) {
 	_, err = newMtsdb(context.Background(), &pgxpool.Pool{}, cfg)
 	assert.Error(err)
 
-	// empty table name
-	cfg = properCfg
-	cfg.TableName = ""
-	_, err = newMtsdb(context.Background(), &pgxpool.Pool{}, cfg)
-	assert.Error(err)
-
 	// batch insert size = 0
 	cfg = properCfg
 	cfg.BatchInsertSize = 0
@@ -295,18 +140,24 @@ func BenchmarkAdd(b *testing.B) {
 	}
 
 	tstConfig := Config{
-		TableName:       "test",
 		WorkerPoolSize:  0,
 		BatchInsertSize: 1000,
 		skipValidation:  true,
 		InsertDuration:  5 * time.Minute,
-		Size:            0,
 	}
 
-	m, err := newMtsdb(context.Background(), nil, tstConfig, "url")
+	ctx := context.Background()
+	m, err := newMtsdb(ctx, nil, tstConfig)
 	if err != nil {
 		b.Error(err)
 	}
+
+	c, err := NewMetricCounter(ctx, "testCounter", MetricCounterConfig{}, "label1")
+	if err != nil {
+		b.Error(err)
+	}
+
+	m.MustRegister(c)
 
 	go func() {
 		for range m.job {
@@ -317,50 +168,9 @@ func BenchmarkAdd(b *testing.B) {
 	b.ResetTimer()
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
-			m.Inc(urls[rand.Intn(1000)])
+			c.Inc(urls[rand.Intn(1000)])
 		}
 	})
 
 	_ = m.Close()
 }
-
-//
-//func BenchmarkFnvAdd(b *testing.B) {
-//	b.ReportAllocs()
-//
-//	gofakeit.Seed(100)
-//	urls := make([]string, 20_000)
-//	for i := 0; i < 20_000; i++ {
-//		urls[i] = gofakeit.URL()
-//	}
-//
-//	f := func() Hasher {
-//		return fnv.New32a()
-//	}
-//	tstConfig := Config{
-//		Size:            10_000,
-//		TableName:       "test",
-//		WorkerPoolSize:  0,
-//		BatchInsertSize: 1000,
-//		skipValidation:  true,
-//	}
-//
-//	m, err := newMtsdb(context.Background(), nil, tstConfig)
-//	if err != nil {
-//		b.Error(err)
-//	}
-//	go func() {
-//		for range m.job {
-//			m.wg.Done()
-//		}
-//	}()
-//
-//	b.ResetTimer()
-//	b.RunParallel(func(pb *testing.PB) {
-//		for pb.Next() {
-//			m.Inc(urls[rand.Intn(1000)])
-//		}
-//	})
-//
-//	_ = m.Close()
-//}

@@ -3,46 +3,51 @@ package mtsdb
 import (
 	"context"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
-	"hash"
-	"hash/fnv"
 	"sync"
 	"sync/atomic"
 	"time"
 )
 
+var _ Mtsdb = &mtsdb{}
+
 type Mtsdb interface {
 	Errors() <-chan error
-	Inc(labels ...string)
-	IncBy(count uint32, labels ...string)
+	MustRegister(containers ...MetricInterface)
 	Stats() (uint64, uint64)
 	Close() error
 }
 
-type mtsdb struct {
-	err       chan error
-	job       chan pgx.Batch
-	ctx       context.Context
-	wg        sync.WaitGroup
-	cancel    context.CancelFunc
-	pool      *pgxpool.Pool
-	container atomic.Pointer[sync.Map]
-	labels    []string
+type PoolInterface interface {
+	SendBatch(ctx context.Context, batch *pgx.Batch) pgx.BatchResults
+}
 
-	config       Config
-	containerLen atomic.Uint64
-	hash32       hash.Hash32
+type metricContainer struct {
+	atomic.Pointer[sync.Map]
+}
+
+type mtsdb struct {
+	mu sync.Mutex
+
+	err     chan error
+	job     chan pgx.Batch
+	ctx     context.Context
+	wg      sync.WaitGroup
+	cancel  context.CancelFunc
+	pool    PoolInterface
+	metrics []MetricInterface
+
+	config Config
 
 	// stats
 	MetricInserts    atomic.Uint64
 	MetricDurationMs atomic.Uint64
 }
 
-func New(ctx context.Context, pool *pgxpool.Pool, configMtsdb Config, labels ...string) (Mtsdb, error) {
-	return newMtsdb(ctx, pool, configMtsdb, labels...)
+func New(ctx context.Context, pool PoolInterface, configMtsdb Config) (Mtsdb, error) {
+	return newMtsdb(ctx, pool, configMtsdb)
 }
 
-func newMtsdb(ctx context.Context, pool *pgxpool.Pool, config Config, labels ...string) (*mtsdb, error) {
+func newMtsdb(ctx context.Context, pool PoolInterface, config Config) (*mtsdb, error) {
 
 	err := validate(pool, config)
 	if err != nil {
@@ -52,33 +57,32 @@ func newMtsdb(ctx context.Context, pool *pgxpool.Pool, config Config, labels ...
 	newCtx, cancel := context.WithCancel(ctx)
 
 	m := &mtsdb{
-		pool:         pool,
-		config:       config,
-		hash32:       fnv.New32a(),
-		ctx:          newCtx,
-		cancel:       cancel,
-		container:    atomic.Pointer[sync.Map]{},
-		containerLen: atomic.Uint64{},
+		pool:    pool,
+		config:  config,
+		ctx:     newCtx,
+		cancel:  cancel,
+		metrics: make([]MetricInterface, 0),
 
 		err:              make(chan error, 100),
 		job:              make(chan pgx.Batch, config.WorkerPoolSize),
 		MetricInserts:    atomic.Uint64{},
 		MetricDurationMs: atomic.Uint64{},
-		labels:           labels,
 	}
-
-	m.container.Store(&sync.Map{})
 
 	// initialize worker pool
 	for i := 0; i < config.WorkerPoolSize; i++ {
 		go m.worker()
 	}
 
-	if config.Size == 0 {
-		go m.startTicker(newCtx, config.InsertDuration)
-	}
+	go m.startTicker(newCtx, config.InsertDuration)
 
 	return m, nil
+}
+
+func (m *mtsdb) MustRegister(metrics ...MetricInterface) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.metrics = append(m.metrics, metrics...)
 }
 
 func (m *mtsdb) Errors() <-chan error {
@@ -91,9 +95,7 @@ func (m *mtsdb) startTicker(ctx context.Context, interval time.Duration) {
 	for {
 		select {
 		case <-ticker.C:
-			if m.containerLen.Load() > 0 {
-				m.insert(m.reset())
-			}
+			m.insert()
 		case <-ctx.Done():
 			return
 		}
