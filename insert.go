@@ -23,10 +23,10 @@ func (m *mtsdb) insert() {
 	//m.mu.Lock()
 	//defer m.mu.Unlock()
 
-	for _, metric := range m.metrics {
+	m.metrics.Range(func(key, metric any) bool {
 		batch := new(pgx.Batch)
 
-		im := metric.Write()
+		im := metric.(MetricInterface).Write()
 		sql := m.generateSql(im.TableName, im.Labels)
 		im.Container.Range(func(key, value any) bool {
 			values := make([]any, len(im.Labels)+1)
@@ -49,7 +49,8 @@ func (m *mtsdb) insert() {
 			m.wg.Add(1) // m.wg.Done() is on sendBatch
 			m.job <- *batch
 		}
-	}
+		return true
+	})
 }
 
 func (m *mtsdb) raiseError(err error) {

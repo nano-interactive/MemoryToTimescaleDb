@@ -26,15 +26,13 @@ type metricContainer struct {
 }
 
 type mtsdb struct {
-	mu sync.Mutex
-
 	err     chan error
 	job     chan pgx.Batch
 	ctx     context.Context
 	wg      sync.WaitGroup
 	cancel  context.CancelFunc
 	pool    PoolInterface
-	metrics []MetricInterface
+	metrics sync.Map
 
 	config Config
 
@@ -61,7 +59,7 @@ func newMtsdb(ctx context.Context, pool PoolInterface, config Config) (*mtsdb, e
 		config:  config,
 		ctx:     newCtx,
 		cancel:  cancel,
-		metrics: make([]MetricInterface, 0),
+		metrics: sync.Map{},
 
 		err:              make(chan error, 100),
 		job:              make(chan pgx.Batch, config.WorkerPoolSize),
@@ -80,9 +78,14 @@ func newMtsdb(ctx context.Context, pool PoolInterface, config Config) (*mtsdb, e
 }
 
 func (m *mtsdb) MustRegister(metrics ...MetricInterface) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.metrics = append(m.metrics, metrics...)
+	cnt := 0
+	m.metrics.Range(func(key, value any) bool {
+		cnt++
+		return true
+	})
+	for i, metric := range metrics {
+		m.metrics.Store(cnt+i, metric)
+	}
 }
 
 func (m *mtsdb) Errors() <-chan error {
