@@ -2,6 +2,8 @@ package mtsdb
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"github.com/jackc/pgx/v5"
 	"sync"
 	"sync/atomic"
@@ -34,7 +36,8 @@ type mtsdb struct {
 	pool    PoolInterface
 	metrics sync.Map
 
-	config Config
+	config            Config
+	concurrentInserts atomic.Int32
 
 	// stats
 	MetricInserts    atomic.Uint64
@@ -98,7 +101,15 @@ func (m *mtsdb) startTicker(ctx context.Context, interval time.Duration) {
 	for {
 		select {
 		case <-ticker.C:
-			m.insert()
+			if m.concurrentInserts.Load() > 10 {
+				m.err <- errors.New(
+					fmt.Sprintf(
+						"number of concurrent inserts into tmsdb %d, tick duration is not enough for all lines to be inserted",
+						m.concurrentInserts.Load(),
+					),
+				)
+			}
+			go m.insert()
 		case <-ctx.Done():
 			return
 		}

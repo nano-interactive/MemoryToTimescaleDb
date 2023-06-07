@@ -128,3 +128,16 @@ func TestMetricCounter_Desc(t *testing.T) {
 	assert.Equal("test desc", counter.Desc())
 
 }
+
+func TestMetricCounter_Error(t *testing.T) {
+	assert := require.New(t)
+	ctx, cancelFunc := context.WithCancel(context.Background())
+	mc, err := NewMetricCounter(ctx, "test error", MetricCounterConfig{}, "url")
+
+	err = mc.Inc("test")
+	assert.NoError(err)
+
+	cancelFunc()
+	err = mc.Inc("test")
+	assert.Error(err)
+}

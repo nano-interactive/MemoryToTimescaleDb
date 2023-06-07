@@ -15,11 +15,12 @@ type insertMetric struct {
 }
 
 func (m *mtsdb) insert() {
-	m.wg.Wait()
-
-	defer m.wg.Done()
+	defer func() {
+		m.wg.Done()
+		m.concurrentInserts.Add(-1)
+	}()
 	m.wg.Add(1)
-
+	m.concurrentInserts.Add(1)
 	//m.mu.Lock()
 	//defer m.mu.Unlock()
 

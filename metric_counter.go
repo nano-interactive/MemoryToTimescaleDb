@@ -2,6 +2,7 @@ package mtsdb
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"sync/atomic"
 )
@@ -15,8 +16,8 @@ type MetricCounterConfig struct {
 
 type Counter interface {
 	MetricInterface
-	Inc(labelValues ...string)
-	Add(value uint32, labels ...string)
+	Inc(labelValues ...string) error
+	Add(value uint32, labels ...string) error
 	Get(labelValues ...string) (uint32, bool)
 }
 
@@ -46,17 +47,17 @@ func NewMetricCounter(ctx context.Context, name string, metricCounterConfig Metr
 	return &m, nil
 }
 
-func (m *metricCounter) Inc(labelValues ...string) {
-	m.Add(1, labelValues...)
+func (m *metricCounter) Inc(labelValues ...string) error {
+	return m.Add(1, labelValues...)
 }
 
-func (m *metricCounter) Add(count uint32, labelValues ...string) {
+func (m *metricCounter) Add(count uint32, labelValues ...string) error {
 	if len(labelValues) == 0 {
-		return
+		return nil
 	}
 
 	if m.ctx.Err() != nil { // no more inserts
-		return
+		return errors.New("context Done, no more inserts")
 	}
 	metricLabelValues := MetricLabelValues{
 		fields: labelValues,
@@ -64,17 +65,15 @@ func (m *metricCounter) Add(count uint32, labelValues ...string) {
 	}
 
 	hashResult, err := hashLabels(labelValues)
-	if err != nil { // TODO handle error
-		//select { // non-blocking channel send
-		//case m.err <- err:
-		//default:
-		//}
-		return
+	if err != nil {
+		return err
 	}
 
 	value, _ := m.container.Load().LoadOrStore(hashResult, &metricLabelValues)
 
 	value.(*MetricLabelValues).count.Add(count)
+
+	return nil
 }
 
 func (m *metricCounter) Desc() string {
