@@ -71,10 +71,14 @@ func TestMetricCounter_Reset(t *testing.T) {
 		container: &container,
 	}
 	counter.labels.Store(0, labels[0])
+	counter.labelsCnt.Store(1)
 
 	// Add some values to the container
-	counter.Add(2, "label1")
-	counter.Add(3, "label2")
+	err := counter.Add(2, "label1")
+	assert.NoError(err)
+
+	err = counter.Add(3, "label2")
+	assert.NoError(err)
 
 	oldMap := counter.reset()
 
@@ -129,7 +133,7 @@ func TestMetricCounter_Desc(t *testing.T) {
 
 }
 
-func TestMetricCounter_Error(t *testing.T) {
+func TestMetricCounter_ErrorCtx(t *testing.T) {
 	assert := require.New(t)
 	ctx, cancelFunc := context.WithCancel(context.Background())
 	mc, err := NewMetricCounter(ctx, "test error", MetricCounterConfig{}, "url")
@@ -139,5 +143,17 @@ func TestMetricCounter_Error(t *testing.T) {
 
 	cancelFunc()
 	err = mc.Inc("test")
+	assert.Error(err)
+}
+
+func TestMetricCounter_ErrorLabels(t *testing.T) {
+	assert := require.New(t)
+
+	mc, err := NewMetricCounter(context.TODO(), "test error", MetricCounterConfig{}, "url")
+
+	err = mc.Inc("test")
+	assert.NoError(err)
+
+	err = mc.Inc("test", "test2")
 	assert.Error(err)
 }

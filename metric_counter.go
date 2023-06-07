@@ -27,6 +27,7 @@ type metricCounter struct {
 	name      string
 	labels    sync.Map
 	config    MetricCounterConfig
+	labelsCnt atomic.Int32
 }
 
 func NewMetricCounter(ctx context.Context, name string, metricCounterConfig MetricCounterConfig, labels ...string) (Counter, error) {
@@ -43,6 +44,7 @@ func NewMetricCounter(ctx context.Context, name string, metricCounterConfig Metr
 	for i, label := range labels {
 		m.labels.Store(i, label)
 	}
+	m.labelsCnt.Store(int32(len(labels)))
 
 	return &m, nil
 }
@@ -52,8 +54,8 @@ func (m *metricCounter) Inc(labelValues ...string) error {
 }
 
 func (m *metricCounter) Add(count uint32, labelValues ...string) error {
-	if len(labelValues) == 0 {
-		return nil
+	if len(labelValues) == 0 || len(labelValues) != int(m.labelsCnt.Load()) {
+		return errors.New("labels len do not match with initialised number of labels")
 	}
 
 	if m.ctx.Err() != nil { // no more inserts
