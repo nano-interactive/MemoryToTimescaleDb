@@ -1,5 +1,0 @@
-package mtsdb
-
-func simpleExample() {
-
-}
