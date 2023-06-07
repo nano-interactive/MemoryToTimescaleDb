@@ -32,9 +32,9 @@ Example:
 
 	m.MustRegister(c)
 	
-    m.Inc("https://example.com/hello","RS","Mobile")
+    c.Inc("https://example.com/hello","RS","Mobile")
     // or 
-    m.Add("https://example.com/hello","RS","Mobile")
+    c.Add(25, "https://example.com/hello","RS","Mobile")
 ```
 
 ### Config Mtsdb params
@@ -63,6 +63,8 @@ c, err = mtsdb.NewMetricCounter(context.Background(), "cnt", mtsdb.MetricCounter
     TableName:   "metrics",
     Description: "",
 }, "url", "country", "device")
+
+c.Inc("https://example.com/hello","RS","Mobile")
 ```
 and the SQL:
 ```postgresql
