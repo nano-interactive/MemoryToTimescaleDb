@@ -26,6 +26,7 @@ func TestStats(t *testing.T) {
 }
 
 func TestStatsReset(t *testing.T) {
+	t.Parallel()
 	assert := require.New(t)
 
 	tstConfig := Config{
@@ -38,7 +39,6 @@ func TestStatsReset(t *testing.T) {
 	m.MetricDurationMs.Store(1e15 + 1)
 	m.MetricInserts.Store(218)
 	ins, dur := m.Stats()
-	ins, dur = m.Stats()
 	assert.Equal(uint64(0), ins)
 	assert.Equal(uint64(0), dur)
 

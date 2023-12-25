@@ -2,7 +2,6 @@ package mtsdb
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"github.com/jackc/pgx/v5"
 	"sync"
@@ -102,12 +101,9 @@ func (m *mtsdb) startTicker(ctx context.Context, interval time.Duration) {
 		select {
 		case <-ticker.C:
 			if m.concurrentInserts.Load() > 10 {
-				m.err <- errors.New(
-					fmt.Sprintf(
-						"number of concurrent inserts into tmsdb %d, tick duration is not enough for all lines to be inserted",
-						m.concurrentInserts.Load(),
-					),
-				)
+				m.err <- fmt.Errorf(
+					"number of concurrent inserts into tmsdb %d, tick duration is not enough for all lines to be inserted",
+					m.concurrentInserts.Load())
 			}
 			go m.insert()
 		case <-ctx.Done():

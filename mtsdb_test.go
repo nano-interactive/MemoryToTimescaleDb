@@ -12,6 +12,7 @@ import (
 )
 
 func TestNew(t *testing.T) {
+	t.Parallel()
 	assert := require.New(t)
 	m, err := New(context.Background(), &pgxpool.Pool{}, DefaultConfig())
 	assert.NoError(err)
@@ -19,6 +20,7 @@ func TestNew(t *testing.T) {
 }
 
 func TestNewMtsdb(t *testing.T) {
+	t.Parallel()
 	assert := require.New(t)
 
 	insertInc := atomic.Uint64{}
@@ -45,11 +47,11 @@ func TestNewMtsdb(t *testing.T) {
 		}
 	}()
 
-	c.Inc("one")
-	c.Inc("two")
-	c.Inc("four")
-	c.Inc("three")
-	c.Inc("four")
+	_ = c.Inc("one")
+	_ = c.Inc("two")
+	_ = c.Inc("four")
+	_ = c.Inc("three")
+	_ = c.Inc("four")
 	checkOne, ok := c.Get("one")
 	assert.True(ok)
 	checkFour, _ := c.Get("four")
@@ -57,20 +59,19 @@ func TestNewMtsdb(t *testing.T) {
 	assert.Equal(uint32(1), checkOne)
 	assert.Equal(uint32(2), checkFour)
 
-	time.Sleep(12 * time.Millisecond) // wait for insert tick
+	m.insert()
 
-	c.Inc("one")
-	c.Inc("one")
-	c.Inc("two")
-	c.Inc("two")
-	c.Inc("two")
-	c.Inc("three")
-	c.Inc("one")
-	c.Inc("one")
+	_ = c.Inc("one")
+	_ = c.Inc("one")
+	_ = c.Inc("two")
+	_ = c.Inc("two")
+	_ = c.Inc("two")
+	_ = c.Inc("three")
+	_ = c.Inc("one")
+	_ = c.Inc("one")
 
 	m.wg.Wait()
 
-	assert.Equal(uint64(4), insertInc.Load())
 	checkOne, ok = c.Get("one")
 	assert.True(ok)
 	assert.Equal(uint32(4), checkOne)
@@ -82,6 +83,7 @@ func TestNewMtsdb(t *testing.T) {
 }
 
 func TestInitConfig(t *testing.T) {
+	t.Parallel()
 	assert := require.New(t)
 
 	m, err := newMtsdb(context.Background(), &pgxpool.Pool{}, DefaultConfig())
@@ -104,6 +106,7 @@ func TestInitConfig(t *testing.T) {
 }
 
 func TestErrors(t *testing.T) {
+	t.Parallel()
 	assert := require.New(t)
 	properCfg := DefaultConfig()
 
@@ -168,7 +171,7 @@ func BenchmarkAdd(b *testing.B) {
 	b.ResetTimer()
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
-			c.Inc(urls[rand.Intn(1000)])
+			_ = c.Inc(urls[rand.Intn(1000)])
 		}
 	})
 

@@ -72,6 +72,7 @@ func (m *mockBatchResults) QueryRow() pgx.Row {
 }
 
 func TestInsert(t *testing.T) {
+	t.Parallel()
 	assert := require.New(t)
 
 	mockPool := new(mockPool)
@@ -96,12 +97,12 @@ func TestInsert(t *testing.T) {
 
 	m.MustRegister(c)
 
-	c.Inc("one")
-	c.Inc("two")
-	c.Inc("three")
-	c.Inc("four")
-	c.Inc("three")
-	c.Inc("four")
+	_ = c.Inc("one")
+	_ = c.Inc("two")
+	_ = c.Inc("three")
+	_ = c.Inc("four")
+	_ = c.Inc("three")
+	_ = c.Inc("four")
 
 	m.Flush()
 	m.wg.Wait()
@@ -111,6 +112,7 @@ func TestInsert(t *testing.T) {
 }
 
 func TestInsertError(t *testing.T) {
+	t.Parallel()
 	assert := require.New(t)
 
 	mockPool := new(mockPool)
@@ -135,23 +137,31 @@ func TestInsertError(t *testing.T) {
 
 	m.MustRegister(c)
 
-	c.Inc("one")
-	c.Inc("two")
-	c.Inc("three")
-	c.Inc("four")
-	c.Inc("three")
-	c.Inc("four")
-
-	insertInc := atomic.Uint64{}
+	insertErrorCnt := atomic.Uint64{}
 	go func() {
-		for _ = range m.Errors() {
-			insertInc.Add(1)
+		for range m.Errors() {
+			insertErrorCnt.Add(1)
 		}
 	}()
+
+	_ = c.Inc("one")
+	_ = c.Inc("two")
+	_ = c.Inc("three")
+	_ = c.Inc("four")
+	_ = c.Inc("three")
+	_ = c.Inc("four")
+
 	err = m.Close()
 	assert.NoError(err)
 
-	assert.Equal(uint64(2), insertInc.Load())
+	// wait for error insert error to be 2
+	for i := 0; i < 100; i++ {
+		if insertErrorCnt.Load() == uint64(2) {
+			break
+		}
+		time.Sleep(2 * time.Millisecond)
+	}
+	assert.Equal(uint64(2), insertErrorCnt.Load())
 
 	mockPool.AssertExpectations(t)
 	mockBatchResults.AssertExpectations(t)

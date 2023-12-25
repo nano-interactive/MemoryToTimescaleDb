@@ -13,8 +13,3 @@ type MetricInterface interface {
 	Desc() string
 	Write() *insertMetric
 }
-
-type Metric struct {
-	name string
-	desc string
-}

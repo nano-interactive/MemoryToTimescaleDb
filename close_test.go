@@ -9,6 +9,7 @@ import (
 )
 
 func TestClose(t *testing.T) {
+	t.Parallel()
 	assert := require.New(t)
 
 	insertInc := atomic.Uint64{}
@@ -35,12 +36,12 @@ func TestClose(t *testing.T) {
 		}
 	}()
 
-	c.Inc("one")
-	c.Inc("two")
-	c.Inc("three")
-	c.Inc("four")
-	c.Inc("three")
-	c.Inc("four")
+	_ = c.Inc("one")
+	_ = c.Inc("two")
+	_ = c.Inc("three")
+	_ = c.Inc("four")
+	_ = c.Inc("three")
+	_ = c.Inc("four")
 
 	assert.Equal(uint64(0), insertInc.Load(), "bulk insert should not be called")
 
@@ -48,7 +49,7 @@ func TestClose(t *testing.T) {
 
 	assert.Equal(uint64(4), insertInc.Load())
 
-	c.Inc("one")
+	_ = c.Inc("one")
 
 	value, ok := c.Get("one")
 	assert.True(ok)

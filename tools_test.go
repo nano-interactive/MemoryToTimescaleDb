@@ -9,6 +9,7 @@ import (
 )
 
 func TestGenerateSql(t *testing.T) {
+	t.Parallel()
 	assert := require.New(t)
 
 	type testData struct {
@@ -50,7 +51,7 @@ func TestGenerateSql(t *testing.T) {
 
 		m.MustRegister(counter)
 
-		counter.Inc(metric.labels...)
+		_ = counter.Inc(metric.labels...)
 
 		assert.Equal(metric.result, m.generateSql(metric.tableName, metric.labels))
 

@@ -25,9 +25,8 @@ type metricCounter struct {
 	ctx       context.Context
 	container *metricContainer
 	name      string
-	labels    sync.Map
+	labels    []string
 	config    MetricCounterConfig
-	labelsCnt atomic.Int32
 }
 
 func NewMetricCounter(ctx context.Context, name string, metricCounterConfig MetricCounterConfig, labels ...string) (Counter, error) {
@@ -37,14 +36,10 @@ func NewMetricCounter(ctx context.Context, name string, metricCounterConfig Metr
 	m := metricCounter{
 		ctx:       ctx,
 		name:      name,
-		labels:    sync.Map{},
+		labels:    labels,
 		config:    metricCounterConfig,
 		container: &mc,
 	}
-	for i, label := range labels {
-		m.labels.Store(i, label)
-	}
-	m.labelsCnt.Store(int32(len(labels)))
 
 	return &m, nil
 }
@@ -54,7 +49,7 @@ func (m *metricCounter) Inc(labelValues ...string) error {
 }
 
 func (m *metricCounter) Add(count uint32, labelValues ...string) error {
-	if len(labelValues) == 0 || len(labelValues) != int(m.labelsCnt.Load()) {
+	if len(labelValues) == 0 || len(labelValues) != len(m.labels) {
 		return errors.New("labels len do not match with initialised number of labels")
 	}
 
@@ -84,15 +79,11 @@ func (m *metricCounter) Desc() string {
 
 func (m *metricCounter) Write() *insertMetric {
 	oldContainer := m.reset()
-	labels := make([]string, 0)
-	m.labels.Range(func(key, value any) bool {
-		labels = append(labels, value.(string))
-		return true
-	})
+
 	return &insertMetric{
 		TableName: m.config.TableName,
 		Container: oldContainer,
-		Labels:    labels,
+		Labels:    m.labels,
 	}
 }
 

@@ -1,9 +1,11 @@
 package mtsdb
 
 import (
-	"fmt"
+	"bytes"
 	"hash/fnv"
+	"strconv"
 	"strings"
+	"unsafe"
 )
 
 func hashLabels(labels []string) (uint32, error) {
@@ -16,15 +18,26 @@ func hashLabels(labels []string) (uint32, error) {
 }
 
 func (m *mtsdb) generateSql(tableName string, labels []string) string {
-	sql := "INSERT" + " INTO %s (%s) VALUES (%s)"
 
-	values := make([]string, len(labels))
-	for i := range labels {
-		values[i] = fmt.Sprintf("$%d", i+1)
+	bb := bytes.NewBuffer(nil)
+	bb.WriteString("INSERT ")
+	bb.WriteString("INTO ")
+	bb.WriteString(tableName)
+	bb.WriteString(" (")
+	for _, label := range labels {
+		bb.WriteString(label)
+		bb.WriteRune(',')
 	}
+	bb.WriteString("cnt) VALUES (")
 
-	labels = append(labels, "cnt")
-	values = append(values, fmt.Sprintf("$%d", len(labels)))
+	for i := 0; i < len(labels); i++ {
+		bb.WriteRune('$')
+		bb.WriteString(strconv.FormatInt(int64(i+1), 10))
+		bb.WriteRune(',')
+	}
+	bb.WriteString("$")
+	bb.WriteString(strconv.FormatInt(int64(len(labels)+1), 10))
+	bb.WriteString(")")
 
-	return fmt.Sprintf(sql, tableName, strings.Join(labels, ","), strings.Join(values, ","))
+	return unsafe.String(unsafe.SliceData(bb.Bytes()), bb.Len())
 }

@@ -8,16 +8,17 @@ import (
 )
 
 func TestMetricCounter_Inc(t *testing.T) {
+	t.Parallel()
 	assert := require.New(t)
 	labels := []string{"url", "country"}
 	counter, err := NewMetricCounter(context.TODO(), "test", MetricCounterConfig{}, labels...)
 	assert.NoError(err)
-	counter.Inc("https://example.com", "RS")
-	counter.Inc("https://example.com", "GB")
-	counter.Inc("https://example.com", "GB")
-	counter.Inc("https://example.com2", "PL")
-	counter.Inc("https://example.com2", "PL")
-	counter.Inc("https://example.com2", "PL")
+	_ = counter.Inc("https://example.com", "RS")
+	_ = counter.Inc("https://example.com", "GB")
+	_ = counter.Inc("https://example.com", "GB")
+	_ = counter.Inc("https://example.com2", "PL")
+	_ = counter.Inc("https://example.com2", "PL")
+	_ = counter.Inc("https://example.com2", "PL")
 
 	// Assert that the appropriate count was added
 	value, ok := counter.Get("https://example.com", "RS")
@@ -39,9 +40,9 @@ func TestMetricCounter_Add(t *testing.T) {
 	labels := []string{"url", "country"}
 	counter, err := NewMetricCounter(context.TODO(), "test", MetricCounterConfig{}, labels...)
 	assert.NoError(err)
-	counter.Add(1, "https://example.com", "RS")
-	counter.Add(2, "https://example.com", "GB")
-	counter.Add(3, "https://example.com2", "PL")
+	_ = counter.Add(1, "https://example.com", "RS")
+	_ = counter.Add(2, "https://example.com", "GB")
+	_ = counter.Add(3, "https://example.com2", "PL")
 
 	// Assert that the appropriate count was added
 	value, ok := counter.Get("https://example.com", "RS")
@@ -58,6 +59,7 @@ func TestMetricCounter_Add(t *testing.T) {
 }
 
 func TestMetricCounter_Reset(t *testing.T) {
+	t.Parallel()
 	assert := require.New(t)
 	labels := []string{"name"}
 	container := metricContainer{}
@@ -66,12 +68,10 @@ func TestMetricCounter_Reset(t *testing.T) {
 	counter := metricCounter{
 		ctx:       context.TODO(),
 		name:      "test",
-		labels:    sync.Map{},
+		labels:    labels,
 		config:    MetricCounterConfig{},
 		container: &container,
 	}
-	counter.labels.Store(0, labels[0])
-	counter.labelsCnt.Store(1)
 
 	// Add some values to the container
 	err := counter.Add(2, "label1")
@@ -93,14 +93,15 @@ func TestMetricCounter_Reset(t *testing.T) {
 }
 
 func TestMetricCounter_Write(t *testing.T) {
+	t.Parallel()
 	assert := require.New(t)
 	labels := []string{"name1", "name2"}
 	counter, err := NewMetricCounter(context.TODO(), "test", MetricCounterConfig{}, labels...)
 	assert.NoError(err)
 
-	counter.Add(5, "value1", "value2")
-	counter.Add(6, "value1", "value3")
-	counter.Add(5, "value1", "value2")
+	_ = counter.Add(5, "value1", "value2")
+	_ = counter.Add(6, "value1", "value3")
+	_ = counter.Add(5, "value1", "value2")
 
 	_, ok := counter.Get("value1", "value2")
 	assert.True(ok)
@@ -124,6 +125,7 @@ func TestMetricCounter_Write(t *testing.T) {
 }
 
 func TestMetricCounter_Desc(t *testing.T) {
+	t.Parallel()
 	assert := require.New(t)
 	labels := []string{"name1", "name2"}
 	counter, err := NewMetricCounter(context.TODO(), "test", MetricCounterConfig{Description: "test desc"}, labels...)
@@ -134,9 +136,11 @@ func TestMetricCounter_Desc(t *testing.T) {
 }
 
 func TestMetricCounter_ErrorCtx(t *testing.T) {
+	t.Parallel()
 	assert := require.New(t)
 	ctx, cancelFunc := context.WithCancel(context.Background())
 	mc, err := NewMetricCounter(ctx, "test error", MetricCounterConfig{}, "url")
+	assert.NoError(err)
 
 	err = mc.Inc("test")
 	assert.NoError(err)
@@ -147,9 +151,11 @@ func TestMetricCounter_ErrorCtx(t *testing.T) {
 }
 
 func TestMetricCounter_ErrorLabels(t *testing.T) {
+	t.Parallel()
 	assert := require.New(t)
 
 	mc, err := NewMetricCounter(context.TODO(), "test error", MetricCounterConfig{}, "url")
+	assert.NoError(err)
 
 	err = mc.Inc("test")
 	assert.NoError(err)

@@ -21,14 +21,13 @@ func (m *mtsdb) insert() {
 	}()
 	m.wg.Add(1)
 	m.concurrentInserts.Add(1)
-	//m.mu.Lock()
-	//defer m.mu.Unlock()
 
 	m.metrics.Range(func(key, metric any) bool {
 		batch := new(pgx.Batch)
 
 		im := metric.(MetricInterface).Write()
 		sql := m.generateSql(im.TableName, im.Labels)
+
 		im.Container.Range(func(key, value any) bool {
 			values := make([]any, len(im.Labels)+1)
 			for i, fieldValue := range value.(*MetricLabelValues).fields {
